@@ -69,9 +69,9 @@ class TicTac4(gym.Env):
 			print("Player ", win, " wins.", sep = "", end = "\n")
 			self.add[win-1] = 1
 			if win == 1:
-				self.reward = 100
+				self.reward = 1
 			else:
-				self.reward = -100
+				self.reward = 0
 
 		return [self.state, self.reward, self.done, self.add]
 

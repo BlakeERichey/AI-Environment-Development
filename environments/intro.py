@@ -24,7 +24,7 @@ def main():
   env = gym.make('tictac4-v0')
   print(env.action_space)
   print(env.observation_space)
-  for _ in range(20):  #game number
+  for _ in range(100):  #game number
     env.reset()
     for t in range(9):   #turn counter
       action = env.action_space.sample() 
