@@ -12,10 +12,10 @@ gym: `python -m pip install gym`
 
 
 Q-Learning Resources:  
-* [Q Learning/Reinforcement Learning](#Source: https://www.samyzaf.com/ML/rl/qmaze.html)
+* [Q Learning/Reinforcement Learning](https://www.samyzaf.com/ML/rl/qmaze.html)
 
-Necessary:
-anaconda python version 3.6.x
-Tensorflow
-keras
-matplotlib
+Necessary:  
+anaconda python version 3.6.x  
+Tensorflow  
+keras  
+matplotlib  
