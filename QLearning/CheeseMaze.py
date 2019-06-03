@@ -80,6 +80,21 @@ class Qmaze(object):
         self.total_reward = 0
         self.visited = set()
 
+    def create_maze(self):
+        base = np.ones(49)
+        L = []
+        for x in range(15): 
+            L+=[random.choice(range(49))]
+        for x in L: 
+            base[x] = 0
+        self._maze = base.reshape((7,7))
+        nrows, ncols = self._maze.shape
+        self.free_cells = [(r,c) for r in range(nrows) for c in range(ncols) if self._maze[r,c] == 1.0]
+        try: 
+            self.free_cells.remove(self.target)
+        except:
+            self.create_maze()
+
     def update_state(self, action):
         nrows, ncols = self.maze.shape
         nrow, ncol, nmode = rat_row, rat_col, mode = self.state
@@ -271,6 +286,7 @@ def qtrain(model, maze, **opt):
 
     for epoch in range(n_epoch):
         loss = 0.0
+        qmaze.create_maze()
         rat_cell = random.choice(qmaze.free_cells)
         qmaze.reset(rat_cell)
         game_over = False
@@ -418,9 +434,9 @@ def completion_check(model, qmaze):
 print(maze)
 
 qmaze = Qmaze(maze)
-qmaze.show()
+#qmaze.show()
 
 model = build_model(maze)
-model.load_weights('model.h5')
-# qtrain(model, maze, epochs=1000, max_memory=8*maze.size, data_size=32)
+#model.load_weights('model.h5')
+qtrain(model, maze, epochs=1000, max_memory=8*maze.size, data_size=32)
 show_game(model, maze, 1)

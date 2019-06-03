@@ -2,7 +2,6 @@ import gym
 from   gym import error, spaces, utils
 from   gym.utils import seeding
 import numpy as np
-import matplotlib.pyplot as plt
 
 class Maze(gym.Env):
   metadata = {'render.modes': ['human']}
@@ -10,7 +9,6 @@ class Maze(gym.Env):
   def __init__(self, maze=np.array([]), rat=(0,0), target=None):
     if not maze.any():
       return
-    plt.ion()
     self._maze = np.array(maze)
     self.action_space = spaces.Discrete(4)
     self.rat_mark = 0.5 # The current rat cell will be painteg by gray 0.5
@@ -36,6 +34,7 @@ class Maze(gym.Env):
     self.visited = set()
     if target:
       self.target = target
+    return self.observe()
 
   def update_state(self, action):
     nrows, ncols = self.maze.shape
