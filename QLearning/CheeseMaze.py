@@ -438,5 +438,5 @@ qmaze = Qmaze(maze)
 
 model = build_model(maze)
 #model.load_weights('model.h5')
-qtrain(model, maze, epochs=1000, max_memory=8*maze.size, data_size=32)
+qtrain(model, maze, n_epoch=100, max_memory=8*maze.size, data_size=32)
 show_game(model, maze, 1)
