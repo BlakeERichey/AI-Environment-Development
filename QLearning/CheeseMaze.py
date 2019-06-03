@@ -44,9 +44,9 @@ epsilon = 0.1
 # ])
 
 maze =  np.array([
-    [ 1.,  0.,  1.,  1.,  1.,  1.,  1.],
+    [ 1.,  0.,  1.,  0.,  1.,  1.,  1.],
     [ 1.,  1.,  1.,  0.,  0.,  1.,  0.],
-    [ 0.,  0.,  0.,  1.,  1.,  1.,  0.],
+    [ 0.,  0.,  1.,  1.,  1.,  1.,  0.],
     [ 1.,  1.,  1.,  1.,  0.,  0.,  1.],
     [ 1.,  0.,  0.,  0.,  1.,  1.,  1.],
     [ 1.,  0.,  1.,  1.,  1.,  1.,  1.],
@@ -399,9 +399,10 @@ def show_game(loaded_model, maze, n_games):
             action = np.argmax(loaded_model.predict(envstate)[0])
 
             envstate, reward, game_status = qmaze.act(action)
+            print(envstate.reshape(7,7), reward, game_status, action)
             print('showing now...')
             if qmaze.show():
-                pass
+                time.sleep(1)
             
             if game_status in ['win', 'lose']:
                 game_over = True
@@ -420,6 +421,6 @@ qmaze = Qmaze(maze)
 qmaze.show()
 
 model = build_model(maze)
-qtrain(model, maze, epochs=1000, max_memory=8*maze.size, data_size=32)
-# model.load_weights('model.h5')
-show_game(model, maze, 2)
+model.load_weights('model.h5')
+# qtrain(model, maze, epochs=1000, max_memory=8*maze.size, data_size=32)
+show_game(model, maze, 1)
