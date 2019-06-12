@@ -4,7 +4,14 @@ import matplotlib.pyplot as plt
 
 # Import and initialize Mountain Car Environment
 env = gym.make('MountainCar-v0')
+print(env.action_space)
+print(env.observation_space)
 env.reset()
+action = env.action_space.sample()
+observation, _, _, _ = env.step(action)
+print('observation', observation, observation.shape)
+env.reset()
+
 
 # Define Q-learning function
 def QLearning(env, learning, discount, epsilon, min_eps, episodes):

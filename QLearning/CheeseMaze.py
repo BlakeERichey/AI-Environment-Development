@@ -1,13 +1,47 @@
 #Source: https://www.samyzaf.com/ML/rl/qmaze.html
 from __future__ import print_function
 import os, sys, time, datetime, json, random
+
 import numpy as np
-from keras.models import Sequential
-from keras.layers.core import Dense, Activation
-from keras.optimizers import SGD , Adam, RMSprop
-from keras.layers.advanced_activations import PReLU
 import matplotlib.pyplot as plt
+
+from keras.layers.advanced_activations import PReLU
+from random                            import randint
+from keras.models                      import Sequential
+from keras.layers.core                 import Dense, Activation
+from keras.optimizers                  import SGD , Adam, RMSprop
+from numpy.random                      import random_integers as rnd
+
 #%matplotlib inline
+ 
+def create_maze(width=10, height=10, complexity=.75, density =.75):
+    # Only odd shapes
+    shape = ((height//2)*2+1, (width//2)*2+1)
+    # Adjust complexity and density relative to maze size
+    complexity = int(complexity*(5*(shape[0]+shape[1])))
+    density    = int(density*(shape[0]//2*shape[1]//2))
+    # Build actual maze
+    Z = np.zeros(shape)
+    # Fill borders
+    Z[0,:] = Z[-1,:] = 1
+    Z[:,0] = Z[:,-1] = 1
+    # Make isles
+    for i in range(density):
+        x, y = rnd(0,shape[1]//2)*2, rnd(0,shape[0]//2)*2
+        Z[y,x] = 1
+        for j in range(complexity):
+            neighbours = []
+            if x > 1:           neighbours.append( (y,x-2) )
+            if x < shape[1]-2:  neighbours.append( (y,x+2) )
+            if y > 1:           neighbours.append( (y-2,x) )
+            if y < shape[0]-2:  neighbours.append( (y+2,x) )
+            if len(neighbours):
+                y_,x_ = neighbours[rnd(0,len(neighbours)-1)]
+                if Z[y_,x_] == 0:
+                    Z[y_,x_] = 1
+                    Z[y_+(y-y_)//2, x_+(x-x_)//2] = 1
+                    x, y = x_, y_
+    return Z
 
 visited_mark = 0.8  # Cells visited by the rat will be painted by gray 0.8
 rat_mark = 0.5      # The current rat cell will be painteg by gray 0.5
@@ -29,71 +63,35 @@ num_actions = len(actions_dict)
 # Exploration factor
 epsilon = 0.1
 
-      
-# maze = np.array([
-#     [ 1.,  0.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.],
-#     [ 1.,  1.,  1.,  1.,  1.,  0.,  1.,  1.,  1.,  1.],
-#     [ 1.,  1.,  1.,  1.,  1.,  0.,  1.,  1.,  1.,  1.],
-#     [ 0.,  0.,  1.,  0.,  0.,  1.,  0.,  1.,  1.,  1.],
-#     [ 1.,  1.,  0.,  1.,  0.,  1.,  0.,  0.,  0.,  1.],
-#     [ 1.,  1.,  0.,  1.,  0.,  1.,  1.,  1.,  1.,  1.],
-#     [ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.],
-#     [ 1.,  1.,  1.,  1.,  1.,  1.,  0.,  0.,  0.,  0.],
-#     [ 1.,  0.,  0.,  0.,  0.,  0.,  1.,  1.,  1.,  1.],
-#     [ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  0.,  1.,  1.]
-# ])
-
-maze =  np.array([
-    [ 1.,  0.,  1.,  0.,  1.,  1.,  1.],
-    [ 1.,  1.,  1.,  0.,  0.,  1.,  0.],
-    [ 0.,  0.,  1.,  1.,  1.,  1.,  0.],
-    [ 1.,  1.,  1.,  1.,  0.,  0.,  1.],
-    [ 1.,  0.,  0.,  0.,  1.,  1.,  1.],
-    [ 1.,  0.,  1.,  1.,  1.,  1.,  1.],
-    [ 1.,  1.,  1.,  0.,  1.,  1.,  1.]
-])
-
 # maze is a 2d Numpy array of floats between 0.0 to 1.0
 # 1.0 corresponds to a free cell, and 0.0 an occupied cell
 # rat = (row, col) initial rat position (defaults to (0,0))
 class Qmaze(object):
-    def __init__(self, maze, rat=(0,0)):
-        self._maze = np.array(maze)
-        nrows, ncols = self._maze.shape
-        self.target = (nrows-1, ncols-1)   # target cell where the "cheese" is
-        self.free_cells = [(r,c) for r in range(nrows) for c in range(ncols) if self._maze[r,c] == 1.0]
-        self.free_cells.remove(self.target)
-        if self._maze[self.target] == 0.0:
-            raise Exception("Invalid maze: target cell cannot be blocked!")
-        if not rat in self.free_cells:
-            raise Exception("Invalid Rat Location: must sit on a free cell")
-        self.reset(rat)
-
-    def reset(self, rat):
-        self.rat = rat
-        self.maze = np.copy(self._maze)
+    def __init__(self, rat=(1,1)):
+        self.maze = create_maze()
         nrows, ncols = self.maze.shape
+        self.target = (nrows-2, ncols-2)   # target cell where the "cheese" is
+        self.maze[self.target] = 0
+        self.maze[1,1] = rat_mark
+        self.free_cells = [(r,c) for r in range(nrows) for c in range(ncols) if self.maze[r,c] == 1.0]
+        self.reset()
+
+    def reset(self, rat=None):
+        if not rat:
+          rat = (randint(0,9), randint(0,9))
+        self.rat = rat
+        self.maze = create_maze()
+        self.maze[rat] = rat_mark
+        self.maze[self.target] = 0
+
+        nrows, ncols = self.maze.shape
+        self.free_cells = [(r,c) for r in range(nrows) for c in range(ncols) if self.maze[r,c] == 1.0]
+        
         row, col = rat
-        self.maze[row, col] = rat_mark
         self.state = (row, col, 'start')
-        self.min_reward = -0.5 * self.maze.size
+        self.min_reward = -0.4 * self.maze.size
         self.total_reward = 0
         self.visited = set()
-
-    def create_maze(self):
-        base = np.ones(49)
-        L = []
-        for x in range(15): 
-            L+=[random.choice(range(49))]
-        for x in L: 
-            base[x] = 0
-        self._maze = base.reshape((7,7))
-        nrows, ncols = self._maze.shape
-        self.free_cells = [(r,c) for r in range(nrows) for c in range(ncols) if self._maze[r,c] == 1.0]
-        try: 
-            self.free_cells.remove(self.target)
-        except:
-            self.create_maze()
 
     def update_state(self, action):
         nrows, ncols = self.maze.shape
@@ -257,7 +255,7 @@ class Experience(object):
                 targets[i, action] = reward + self.discount * Q_sa
         return inputs, targets
 
-def qtrain(model, maze, **opt):
+def qtrain(model, **opt):
     global epsilon
     n_epoch = opt.get('n_epoch', 15000)
     max_memory = opt.get('max_memory', 1000)
@@ -273,22 +271,20 @@ def qtrain(model, maze, **opt):
         model.load_weights(weights_file)
 
     # Construct environment/game from numpy array: maze (see above)
-    qmaze = Qmaze(maze)
+    qmaze = Qmaze()
 
     # Initialize experience replay object
     experience = Experience(model, max_memory=max_memory)
 
     win_history = []   # history of win/lose game
     n_free_cells = len(qmaze.free_cells)
-    hsize = qmaze.maze.size//2   # history window size
+    hsize = qmaze.maze.size//3   # history window size
     win_rate = 0.0
     imctr = 1
 
     for epoch in range(n_epoch):
         loss = 0.0
-        qmaze.create_maze()
-        rat_cell = random.choice(qmaze.free_cells)
-        qmaze.reset(rat_cell)
+        qmaze.reset()
         game_over = False
 
         # get initial envstate (1d flattened canvas)
@@ -399,12 +395,11 @@ def play_game(model, qmaze, rat_cell):
         elif game_status == 'lose':
             return False
 
-def show_game(loaded_model, maze, n_games):
+def show_game(loaded_model, n_games):
     n_games = n_games or 1
     for game in range(n_games):
-        qmaze = Qmaze(maze)
-        rat = random.choice(qmaze.free_cells)
-        qmaze.reset(rat)
+        qmaze = Qmaze()
+        qmaze.reset()
         qmaze.show()
         game_over = False
         envstate = qmaze.observe()
@@ -415,7 +410,7 @@ def show_game(loaded_model, maze, n_games):
             action = np.argmax(loaded_model.predict(envstate)[0])
 
             envstate, reward, game_status = qmaze.act(action)
-            print(envstate.reshape(7,7), reward, game_status, action)
+            print(envstate.reshape(11,11), reward, game_status, action)
             print('showing now...')
             if qmaze.show():
                 time.sleep(1)
@@ -431,12 +426,15 @@ def completion_check(model, qmaze):
             return False
     return True
 
-print(maze)
 
-qmaze = Qmaze(maze)
-#qmaze.show()
+qmaze = Qmaze()
 
+maze = qmaze.maze
 model = build_model(maze)
-#model.load_weights('model.h5')
-qtrain(model, maze, n_epoch=100, max_memory=8*maze.size, data_size=32)
-show_game(model, maze, 1)
+
+qtrain(model, n_epoch=1000, max_memory=8*maze.size, data_size=32, weights_file='model.h5')
+show_game(model, 1)
+
+# model.load_weights('model.h5')
+# show_game(model, 1)
+# qtrain(model, maze, n_epoch=200, max_memory=8*maze.size, data_size=32)
