@@ -15,6 +15,7 @@ from numpy.random                      import random_integers as rnd
 #%matplotlib inline
  
 def create_maze(width=10, height=10, complexity=.75, density =.75):
+    return np.zeros((height+1, width+1))
     # Only odd shapes
     shape = ((height//2)*2+1, (width//2)*2+1)
     # Adjust complexity and density relative to maze size
@@ -165,7 +166,7 @@ class Qmaze(object):
             return 'lose'
         rat_row, rat_col, mode = self.state
         nrows, ncols = self.maze.shape
-        if rat_row == nrows-1 and rat_col == ncols-1:
+        if (rat_row, rat_col) == self.target:
             return 'win'
 
         return 'not_over'
@@ -187,14 +188,14 @@ class Qmaze(object):
         elif col == ncols-1:
             actions.remove(2)
 
-        if row>0 and self.maze[row-1,col] == 0.0:
+        if row>0 and self.maze[row-1,col] == 1.0:
             actions.remove(1)
-        if row<nrows-1 and self.maze[row+1,col] == 0.0:
+        if row<nrows-1 and self.maze[row+1,col] == 1.0:
             actions.remove(3)
 
-        if col>0 and self.maze[row,col-1] == 0.0:
+        if col>0 and self.maze[row,col-1] == 1.0:
             actions.remove(0)
-        if col<ncols-1 and self.maze[row,col+1] == 0.0:
+        if col<ncols-1 and self.maze[row,col+1] == 1.0:
             actions.remove(2)
 
         return actions
@@ -303,6 +304,7 @@ def qtrain(model, **opt):
 
             # Apply action, get reward and new envstate
             envstate, reward, game_status = qmaze.act(action)
+            # print(envstate.reshape(11,11), reward, game_status, action, qmaze.valid_actions())
             if game_status == 'win':
                 win_history.append(1)
                 game_over = True
@@ -432,7 +434,8 @@ qmaze = Qmaze()
 maze = qmaze.maze
 model = build_model(maze)
 
-qtrain(model, n_epoch=1000, max_memory=8*maze.size, data_size=32, weights_file='model.h5')
+qtrain(model, n_epoch=200, max_memory=8*maze.size, data_size=32)
+# qtrain(model, n_epoch=200, max_memory=8*maze.size, data_size=32, weights_file='model.h5')
 show_game(model, 1)
 
 # model.load_weights('model.h5')
