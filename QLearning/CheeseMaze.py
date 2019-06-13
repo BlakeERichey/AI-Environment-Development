@@ -15,7 +15,18 @@ from numpy.random                      import random_integers as rnd
 #%matplotlib inline
  
 def create_maze(width=10, height=10, complexity=.75, density =.75):
-    return np.zeros((height+1, width+1))
+    return np.array([
+        [ 1.,  0.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.],
+        [ 1.,  1.,  1.,  1.,  1.,  0.,  1.,  1.,  1.,  1.],
+        [ 1.,  1.,  1.,  1.,  1.,  0.,  1.,  1.,  1.,  1.],
+        [ 0.,  0.,  1.,  0.,  0.,  1.,  0.,  1.,  1.,  1.],
+        [ 1.,  1.,  0.,  1.,  0.,  1.,  0.,  0.,  0.,  1.],
+        [ 1.,  1.,  0.,  1.,  0.,  1.,  1.,  1.,  1.,  1.],
+        [ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.,  1.],
+        [ 1.,  1.,  1.,  1.,  1.,  1.,  0.,  0.,  0.,  0.],
+        [ 1.,  0.,  0.,  0.,  0.,  0.,  1.,  1.,  1.,  1.],
+        [ 1.,  1.,  1.,  1.,  1.,  1.,  1.,  0.,  1.,  1.]
+    ])
     # Only odd shapes
     shape = ((height//2)*2+1, (width//2)*2+1)
     # Adjust complexity and density relative to maze size
@@ -71,7 +82,7 @@ class Qmaze(object):
     def __init__(self, rat=(1,1)):
         self.maze = create_maze()
         nrows, ncols = self.maze.shape
-        self.target = (nrows-2, ncols-2)   # target cell where the "cheese" is
+        self.target = (nrows-1, ncols-1)   # target cell where the "cheese" is
         self.maze[self.target] = 0
         self.maze[1,1] = rat_mark
         self.free_cells = [(r,c) for r in range(nrows) for c in range(ncols) if self.maze[r,c] == 1.0]
@@ -124,7 +135,7 @@ class Qmaze(object):
     def get_reward(self):
         rat_row, rat_col, mode = self.state
         nrows, ncols = self.maze.shape
-        if rat_row == nrows-1 and rat_col == ncols-1:
+        if (rat_row, rat_col) == self.target:
             return 1.0
         if mode == 'blocked':
             return self.min_reward - 1
@@ -188,9 +199,9 @@ class Qmaze(object):
         elif col == ncols-1:
             actions.remove(2)
 
-        if row>0 and self.maze[row-1,col] == 1.0:
+        if row>0 and self.maze[row-1,col] == 0.0:
             actions.remove(1)
-        if row<nrows-1 and self.maze[row+1,col] == 1.0:
+        if row<nrows-1 and self.maze[row+1,col] == 0.0:
             actions.remove(3)
 
         if col>0 and self.maze[row,col-1] == 1.0:
@@ -279,7 +290,7 @@ def qtrain(model, **opt):
 
     win_history = []   # history of win/lose game
     n_free_cells = len(qmaze.free_cells)
-    hsize = qmaze.maze.size//3   # history window size
+    hsize = qmaze.maze.size   # history window size
     win_rate = 0.0
     imctr = 1
 
@@ -412,7 +423,7 @@ def show_game(loaded_model, n_games):
             action = np.argmax(loaded_model.predict(envstate)[0])
 
             envstate, reward, game_status = qmaze.act(action)
-            print(envstate.reshape(11,11), reward, game_status, action)
+            print(envstate.reshape(10,10), reward, game_status, action)
             print('showing now...')
             if qmaze.show():
                 time.sleep(1)
@@ -435,9 +446,9 @@ maze = qmaze.maze
 model = build_model(maze)
 
 qtrain(model, n_epoch=200, max_memory=8*maze.size, data_size=32)
-# qtrain(model, n_epoch=200, max_memory=8*maze.size, data_size=32, weights_file='model.h5')
-show_game(model, 1)
+# qtrain(model, n_epoch=1000, max_memory=8*maze.size, data_size=32, weights_file='model.h5')
+# show_game(model, 2)
 
 # model.load_weights('model.h5')
-# show_game(model, 1)
+# show_game(model, 2)
 # qtrain(model, maze, n_epoch=200, max_memory=8*maze.size, data_size=32)
