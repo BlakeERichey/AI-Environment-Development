@@ -101,7 +101,7 @@ class DQAgent(Utilities):
         self.nodes_per_layer = kwargs.get('nodes_per_layer', [])
         self.dropout_rate    = kwargs.get('dropout_rate',    0.5)
         self.add_dropout     = kwargs.get('add_dropout',     False)
-        self.activation      = kwargs.get('activation',      'softmax')
+        self.activation      = kwargs.get('activation',      'linear')
         self.num_features    = self.env.observation_space.shape[0]
 
         #Create NN
@@ -140,16 +140,46 @@ class DQAgent(Utilities):
       pass
 
     def get_batch(self):
-      pass
+        mem_size   = len(self.memory)
+        batch_size = min(mem_size, self.batch_size)
+        env_size   = self.memory[0][0].reshape(1, -1).shape[1]
 
-    def learn(self):
+        inputs = np.zeros((batch_size, env_size))
+        targets = np.zeros((batch_size, self.num_outputs))
+        for i, j in enumerate(np.random.choice(range(mem_size), batch_size, replace=False)):
+            envstate, action, reward, next_envstate, done = self.memory[j]
+            inputs[i] = envstate
+            targets[i] = self.predict(envstate)
+            Q_sa = np.max(self.predict(next_envstate))
+            if done:
+                targets[i, action] = reward
+            else:
+                # reward + gamma * max_a' Q(s', a')
+                targets[i, action] = reward + self.discount * Q_sa
+        return inputs, targets
+
+    def learn(self): #add callback options?
       pass
     
-    def load_weights(self):
-      pass
+    def load_weights(self, filename):
+      '''loads weights from a file'''
+      self.model.load_weights(filename)
     
-    def predict(self): #Action decision polcicy options?
-      pass
+    def predict(self, envstate): 
+        '''
+            envstate: envstate to be evaluated
+            returns:  given envstate, returns best action model believes to take
+        '''
+        assert self.model, 'Model must be present to predict'
+
+        qvals = self.model.predict(envstate.reshape(1, -1))[0]
+        if self.action_policy == 'softmax':
+            action = np.argmax(np.random.multinomial(1, qvals))
+        else:
+            action = np.argmax(qvals)
+
+        return action
+
 
     def remember(self, episode):
       'Add to replay buffer'
