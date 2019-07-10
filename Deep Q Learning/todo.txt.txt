@@ -1,0 +1,5 @@
+add loss plots to utilities
+
+implement early stopping:
+
+https://chrisalbon.com/deep_learning/keras/neural_network_early_stopping/
