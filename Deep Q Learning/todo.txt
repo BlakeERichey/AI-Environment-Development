@@ -1,4 +1,6 @@
 add loss plots to utilities
+add working softmax
+add cnn
 
 implement early stopping:
 

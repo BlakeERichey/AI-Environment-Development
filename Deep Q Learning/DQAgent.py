@@ -225,7 +225,7 @@ class DQAgent(Utilities):
       history = self.model.fit(
           inputs,
           targets,
-          batch_size = self.batch_size,
+          batch_size = self.batch_size//4,
           verbose=0,
       )
       loss = self.model.evaluate(inputs, targets, verbose=0)[0]

@@ -1,19 +1,19 @@
 import gym
 from DQAgent import DQAgent
 
-env = gym.make('MountainCar-v0')
+env = gym.make('CartPole-v0')
 
 agent_opts = {
                 'BATCH_SIZE':             16,
                 'AGGREGATE_STATS_EVERY':   5, # not implemented
-                'SHOW_EVERY':              2,
+                'SHOW_EVERY':              5,
                 'EPSILON_START':         .99,
-                'EPSILON_DECAY':         .995,
+                'EPSILON_DECAY':         .95,
                 'DISCOUNT':              .90,
-                'MAX_STEPS':             200,
-                'MIN_EPSILON' :          .15,
+                'MAX_STEPS':             500,
+                'MIN_EPSILON' :          .10,
                 'REPLAY_MEMORY_SIZE':    500,
-                'LEARNING_RATE':         0.05,
+                'LEARNING_RATE':         0.01,
                 'ACTION_POLICY':         'eg'
             } 
 
@@ -28,9 +28,9 @@ model_opts = {
 
 agent = DQAgent(env, **agent_opts)
 agent.build_model(**model_opts)
-agent.load_weights('weights.h5')
-agent.train(n_epochs=3000)
+agent.load_weights('cartpole.h5')
+#agent.train(n_epochs=200)
 agent.evaluate(5)
 env.close()
-agent.save_weights('weights')
+#agent.save_weights('cartpole')
 print('Best Reward:', agent.best_reward)
