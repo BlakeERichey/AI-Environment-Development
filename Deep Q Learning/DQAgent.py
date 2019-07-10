@@ -171,7 +171,7 @@ class DQAgent(Utilities):
                     print('Added Dense layer with ' + str(nodes) + ' nodes.')
                     if self.add_dropout:
                         model.add(Dropout(rate = self.dropout_rate, name='dropout_'+str(layer+1)))
-                    print('Added Dropout to layer')
+                        print('Added Dropout to layer')
                 
                 #output layer
                 model.add(Dense(units = self.num_outputs, activation = self.activation, name='dense_output'))
@@ -235,6 +235,7 @@ class DQAgent(Utilities):
     def load_weights(self, filename):
       '''loads weights from a file'''
       self.model.load_weights(filename)
+      print(f'Successfully loaded weights from: {filename}')
     
     def predict(self, envstate): 
         '''
