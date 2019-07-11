@@ -15,7 +15,7 @@ from   collections                 import deque
 from   tensorflow.keras            import backend
 from   tensorflow.keras.models     import Sequential
 from   tensorflow.keras.optimizers import Adam
-from   tensorflow.keras.callbacks  import TensorBoard
+from   tensorflow.keras.callbacks  import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers     import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
 
@@ -86,7 +86,9 @@ class DQAgent(Utilities):
                 'MIN_EPSILON' :          0.01,
                 'REPLAY_MEMORY_SIZE':    1000,
                 'LEARNING_RATE':         0.001,
-                'ACTION_POLICY':         'eg'
+                'ACTION_POLICY':         'eg',
+                'EPOCH_REWARD_GOAL':     False,
+                'REWARD_GOAL':           False,
             } 
         '''
         assert isinstance(env,gym.wrappers.time_limit.TimeLimit),\
@@ -96,15 +98,17 @@ class DQAgent(Utilities):
         self.weights_file  = kwargs.get('WEIGHTS_FILE',       "")
 
         # Hyperparameters
-        self.batch_size    = kwargs.get('BATCH_SIZE',         8)     # How many steps (samples) to use for training
-        self.max_steps     = kwargs.get('MAX_STEPS',          500)
-        self.epsilon       = kwargs.get('EPSILON_START',      0.98)
-        self.epsilon_decay = kwargs.get('EPSILON_DECAY',      0.98)
-        self.discount      = kwargs.get('DISCOUNT',           0.99)  #HIGH VALUE = SHORT TERM MEMORY
-        self.replay_size   = kwargs.get('REPLAY_MEMORY_SIZE', 1000)  #steps in memory
-        self.min_epsilon   = kwargs.get('MIN_EPSILON',        0.01)
-        self.learning_rate = kwargs.get('LEARNING_RATE',      0.001)
-        self.action_policy = kwargs.get('ACTION_POLICY',      'eg')  #epsilon greedy
+        self.batch_size        = kwargs.get('BATCH_SIZE',         8)     # How many steps (samples) to use for training
+        self.max_steps         = kwargs.get('MAX_STEPS',          500)
+        self.action_policy     = kwargs.get('ACTION_POLICY',      'eg')  #epsilon greedy
+        self.epsilon           = kwargs.get('EPSILON_START',      0.98)
+        self.epsilon_decay     = kwargs.get('EPSILON_DECAY',      0.98)
+        self.discount          = kwargs.get('DISCOUNT',           0.99)  #HIGH VALUE = SHORT TERM MEMORY
+        self.replay_size       = kwargs.get('REPLAY_MEMORY_SIZE', 1000)  #steps in memory
+        self.min_epsilon       = kwargs.get('MIN_EPSILON',        0.01)
+        self.learning_rate     = kwargs.get('LEARNING_RATE',      0.001)
+        self.epoch_reward_goal = kwargs.get('EPOCH_REWARD_GOAL',  False) # Goal for entire epoch 
+        self.reward_goal       = kwargs.get('REWARD_GOAL',        False) # single reward goal 
         
         # Data Recording Variables
         self.show_every            = kwargs.get('SHOW_EVERY',            10)
@@ -122,10 +126,10 @@ class DQAgent(Utilities):
         if model:
             self.model = model
         elif self.weights_file:
-            self.build_model(lr = self.learning_rate)
+            self.build_model()
             self.model = model.load_weights(self.weights_file)
 
-    def build_model(self, model_type='dense', lr = 0.001, **kwargs):
+    def build_model(self, model_type='dense', **kwargs):
         '''
             Builds model to be trained
 
@@ -134,6 +138,7 @@ class DQAgent(Utilities):
                 'default_nodes':   20,
                 'dropout_rate':    0.5,
                 'add_dropout':     False,
+                'add_callbacks':   False,
                 'activation':      'linear',
                 'nodes_per_layer': [20,20,20],
             }
@@ -146,6 +151,7 @@ class DQAgent(Utilities):
             self.nodes_per_layer = kwargs.get('nodes_per_layer', [])
             self.dropout_rate    = kwargs.get('dropout_rate',    0.5)
             self.add_dropout     = kwargs.get('add_dropout',     False)
+            self.add_callbacks   = kwargs.get('add_callbacks',   False)
             self.activation      = kwargs.get('activation',      'linear')
             self.num_features    = self.env.observation_space.shape[0]
 
@@ -168,34 +174,44 @@ class DQAgent(Utilities):
 
                     print(layer)
                     model.add(Dense(units = nodes, activation = 'relu'))
-                    print('Added Dense layer with ' + str(nodes) + ' nodes.')
+                    print(f'Added Dense layer with {nodes} nodes.')
                     if self.add_dropout:
                         model.add(Dropout(rate = self.dropout_rate, name='dropout_'+str(layer+1)))
                         print('Added Dropout to layer')
                 
                 #output layer
                 model.add(Dense(units = self.num_outputs, activation = self.activation, name='dense_output'))
-                model.compile(optimizer = Adam(lr=lr), loss = 'mse', metrics=['accuracy']) #Add loss for cross entropy?
+                model.compile(optimizer = Adam(lr=self.learning_rate), loss = 'mse', metrics=['accuracy']) #Add loss for cross entropy?
                 model.summary() 
 
         
         self.model = model
     
     def evaluate(self, n_epochs=1):
-        print('Evaluating...')
-        for _ in range(n_epochs):
+        start_time = datetime.datetime.now()
+        print(f'Evaluating... Starting at: {start_time}')
+        
+        for epoch in range(n_epochs):
             n_steps = 0
             done = False
             envstate = self.env.reset()
+            rewards = []
             while (not done and n_steps < self.max_steps):
                 prev_envstate = envstate
                 q             = self.model.predict(prev_envstate.reshape(1, -1))
                 action        = np.argmax(q[0])
                 envstate, reward, done, info = self.env.step(action)
+                
                 n_steps += 1
+                rewards.append(reward)
                 self.env.render()
-
+            
+            dt = datetime.datetime.now() - start_time
+            t = self.format_time(dt.total_seconds())
+            results = f'Epoch: {epoch}/{n_epochs-1} | Steps {n_steps} | Cumulative Reward: {sum(rewards)} | Time: {t}'
+            print(results)
       
+        self.env.close()
 
     def get_batch(self):
         '''
@@ -222,9 +238,16 @@ class DQAgent(Utilities):
 
     def learn(self): #add callback options?
       inputs, targets = self.get_batch()
+      test_input, test_target = self.get_batch()
+      
+      callbacks = []
+      if self.add_callbacks:
+        callbacks = [ModelCheckpoint(filepath='best_model.h5', monitor='loss', save_best_only=True)]
+
       history = self.model.fit(
           inputs,
           targets,
+          callbacks = callbacks,
           batch_size = self.batch_size//4,
           verbose=0,
       )
@@ -286,6 +309,7 @@ class DQAgent(Utilities):
             n_steps  = 0
             done     = False
             envstate = self.env.reset()
+            rewards = []
             while (not done and n_steps<max_steps):
                 prev_envstate = envstate
                 action = self.predict(prev_envstate)
@@ -296,15 +320,40 @@ class DQAgent(Utilities):
                 self.remember(episode)
 
                 loss = self.learn() #fit model
-                if epoch >= n_epochs - 10:
-                    self.env.render()
+                rewards.append(reward)
                 n_steps += 1
+
+                #save model if desired goal is met
+                if self.reward_goal and reward >= self.reward_goal:
+                    if hasattr(self, 'best_model') and loss < self.best_model['loss']:
+                        self.model.save_weights('best_model.h5', overwrite=True)
+                    else:
+                        self.model.save_weights('best_model.h5', overwrite=True)
+                        self.best_model = {
+                            'weights': self.model.get_weights(),
+                            'loss':    loss,
+                            }
 
             dt = datetime.datetime.now() - self.start_time
             t  = self.format_time(dt.total_seconds())
             if epoch % self.show_every == 0:
-                results = f'Epoch: {epoch}/{n_epochs-1} | Loss: %.4f | Steps {n_steps} | Epsilon: %.3f | Time: {t}' % (loss, self.epsilon)
+                results = f'Epoch: {epoch}/{n_epochs-1} | ' +\
+                    f'Loss: %.4f | ' % loss +\
+                    f'Steps {n_steps} | ' +\
+                    f'Epsilon: %.3f | ' % self.epsilon +\
+                    f'Time: {t}'
                 print(results)
+            
+            #save model if desired goal is met
+            if self.epoch_reward_goal and sum(rewards) >= self.epoch_reward_goal:
+                if hasattr(self, 'best_model') and loss < self.best_model['loss']:
+                        self.model.save_weights('best_model.h5', overwrite=True)
+                else:
+                    self.model.save_weights('best_model.h5', overwrite=True)
+                    self.best_model = {
+                        'weights': self.model.get_weights(),
+                        'loss':    loss,
+                        }
 
             #decay epsilon after each epoch
             if self.action_policy == 'eg':
