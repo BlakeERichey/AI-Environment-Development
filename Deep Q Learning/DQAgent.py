@@ -89,6 +89,7 @@ class DQAgent(Utilities):
                 'ACTION_POLICY':         'eg',
                 'EPOCH_REWARD_GOAL':     False,
                 'REWARD_GOAL':           False,
+                'BEST_MODEL_FILE':       'best_model.h5',
             } 
         '''
         assert isinstance(env,gym.wrappers.time_limit.TimeLimit),\
@@ -109,6 +110,7 @@ class DQAgent(Utilities):
         self.learning_rate     = kwargs.get('LEARNING_RATE',      0.001)
         self.epoch_reward_goal = kwargs.get('EPOCH_REWARD_GOAL',  False) # Goal for entire epoch 
         self.reward_goal       = kwargs.get('REWARD_GOAL',        False) # single reward goal 
+        self.best_model_file   = kwargs.get('BEST_MODEL_FILE',    'best_model.h5') #file to save best model to
         
         # Data Recording Variables
         self.show_every            = kwargs.get('SHOW_EVERY',            10)
@@ -326,9 +328,9 @@ class DQAgent(Utilities):
                 #save model if desired goal is met
                 if self.reward_goal and reward >= self.reward_goal:
                     if hasattr(self, 'best_model') and loss < self.best_model['loss']:
-                        self.model.save_weights('best_model.h5', overwrite=True)
+                        self.model.save_weights(self.best_model_file, overwrite=True)
                     else:
-                        self.model.save_weights('best_model.h5', overwrite=True)
+                        self.model.save_weights(self.best_model_file, overwrite=True)
                         self.best_model = {
                             'weights': self.model.get_weights(),
                             'loss':    loss,
@@ -347,9 +349,9 @@ class DQAgent(Utilities):
             #save model if desired goal is met
             if self.epoch_reward_goal and sum(rewards) >= self.epoch_reward_goal:
                 if hasattr(self, 'best_model') and loss < self.best_model['loss']:
-                        self.model.save_weights('best_model.h5', overwrite=True)
+                        self.model.save_weights(self.best_model_file, overwrite=True)
                 else:
-                    self.model.save_weights('best_model.h5', overwrite=True)
+                    self.model.save_weights(self.best_model_file, overwrite=True)
                     self.best_model = {
                         'weights': self.model.get_weights(),
                         'loss':    loss,

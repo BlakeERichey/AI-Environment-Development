@@ -18,6 +18,7 @@ agent_opts = {
                 'ACTION_POLICY':         'eg',
                 'EPOCH_REWARD_GOAL':     200,
                 'REWARD_GOAL':           False,
+                'BEST_MODEL_FILE':       'best_model.h5',
             } 
 
 model_opts = {
@@ -31,14 +32,14 @@ model_opts = {
             }
 
 #Train models
-agent = DQAgent(env, **agent_opts)
-agent.build_model(**model_opts)
-# agent.load_weights('cartpole.h5')
-agent.train(n_epochs=300)
-agent.save_weights('cartpole')
-agent.evaluate(n_epochs=5)
-env.close()
-print('Best Reward:', agent.best_reward)
+#agent = DQAgent(env, **agent_opts)
+#agent.build_model(**model_opts)
+## agent.load_weights('cartpole.h5')
+#agent.train(n_epochs=300)
+#agent.save_weights('cartpole')
+#agent.evaluate(n_epochs=5)
+#env.close()
+#print('Best Reward:', agent.best_reward)
 
 #Evaluate models
 if path.isfile('best_model.h5'):
