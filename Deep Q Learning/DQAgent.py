@@ -5,7 +5,7 @@ Created on Monday July 8, 2019
 @author: Blake Richey
 '''
 
-import cProfile, pstats, io
+import cProfile, pstats, io #for profiling
 
 import gym
 import os, datetime, random
@@ -244,7 +244,7 @@ class DQAgent(Utilities):
       
       callbacks = []
       if self.add_callbacks:
-        callbacks = [ModelCheckpoint(filepath='best_model.h5', monitor='loss', save_best_only=True)]
+        callbacks = [ModelCheckpoint(filepath=self.best_model_file, monitor='loss', save_best_only=True)]
 
       history = self.model.fit(
           inputs,
@@ -362,6 +362,7 @@ class DQAgent(Utilities):
                 decay = self.explore_spec['EPSILON_DECAY']
                 self.epsilon = max(self.min_epsilon, decay*self.epsilon)
     
+    #used to profile methods
     # def temp_get_batch(self):
     #     pr = cProfile.Profile()
     #     pr.enable()
