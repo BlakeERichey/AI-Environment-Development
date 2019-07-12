@@ -1,6 +1,7 @@
 add loss plots to utilities
 add working softmax
 add cnn
+implement eligibility trace
 
 implement early stopping, modelscheckpoint:
 
