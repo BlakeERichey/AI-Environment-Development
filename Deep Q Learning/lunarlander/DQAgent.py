@@ -1,5 +1,5 @@
+#most up to date stable version of DQAgent
 # -*- coding: utf-8 -*-
-#Most up to date and stable version of DQAgent
 '''
 Created on Monday July 8, 2019
 
@@ -40,7 +40,7 @@ class Utilities():
             'cumulative': [],
         }
 
-    def collect_aggregate_rewards(self,epoch,rewards,cumulative=False):
+    def collect_aggregate_rewards(self,epoch,rewards):
         """Collect rewards statistics."""
 
         min_reward     = min(rewards)
@@ -55,7 +55,7 @@ class Utilities():
             self.aggregate_episode_rewards['max'].append(max_reward)        
             self.aggregate_episode_rewards['average'].append(average_reward)    
     
-    def show_plots(self, cumulative=False):
+    def show_plots(self):
         """Show plots."""
         
         if self.cumulative:
@@ -372,7 +372,7 @@ class DQAgent(Utilities):
                 print(results)
 
             if self.collect_results and epoch % self.aggregate_stats_every == 0:
-                self.collect_aggregate_rewards(epoch, rewards, self.collect_cumulative)
+                self.collect_aggregate_rewards(epoch, rewards)
             
             #save model if desired goal is met
             if self.save_every_epoch:
@@ -397,17 +397,18 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'steps':   150
+                    'reward':  100
                     }
 
         mod_info = None
-        if len(rewards) > self.best_model['steps']:
+        new_score = sum(rewards)
+        if new_score > self.best_model['reward']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
-                'steps':   len(rewards)
+                'reward':  new_score
             }
-        elif len(rewards) == self.best_model['steps'] and loss < self.best_model['loss']:
+        elif new_score == self.best_model['reward'] and loss < self.best_model['loss']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
@@ -415,5 +416,5 @@ class DQAgent(Utilities):
         
         if mod_info:
             self.best_model.update(mod_info)
-            print('New best model reached: {', self.best_model['loss'], self.best_model['steps'], '}')
+            print('New best model reached: {', self.best_model['loss'], self.best_model['reward'], '}')
             self.model.save_weights(self.best_model_file, overwrite=True)

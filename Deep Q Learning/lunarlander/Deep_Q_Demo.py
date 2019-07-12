@@ -2,7 +2,7 @@ import gym, os
 from os      import path
 from DQAgent import DQAgent
 
-env = gym.make('CartPole-v0')
+env = gym.make('LunarLander-v2')
 
 agent_opts = {
                 #hyperparameters
@@ -10,20 +10,20 @@ agent_opts = {
                 'EPSILON_START':         .99,
                 'EPSILON_DECAY':         .99,
                 'DISCOUNT':              .90,
-                'MAX_STEPS':             200,
-                'MIN_EPSILON' :          0.1,
-                'REPLAY_MEMORY_SIZE':    500,
+                'MAX_STEPS':             500,
+                'MIN_EPSILON' :          0.100,
+                'REPLAY_MEMORY_SIZE':    1000,
                 'LEARNING_RATE':         0.01,
                 'ACTION_POLICY':         'eg',
 
                 #saving and logging results
-                'AGGREGATE_STATS_EVERY':   5,
+                'AGGREGATE_STATS_EVERY':   25,
                 'SHOW_EVERY':              2,
                 'COLLECT_RESULTS':      True,
                 'COLLECT_CUMULATIVE':   True,
                 'SAVE_EVERY_EPOCH':     True,
                 'SAVE_EVERY_STEP':      False,
-                'BEST_MODEL_FILE':      'best_model.h5',
+                'BEST_MODEL_FILE':      'LunarLander_best.h5',
             } 
 
 model_opts = {
@@ -39,17 +39,17 @@ model_opts = {
 #Train models
 agent = DQAgent(env, **agent_opts)
 agent.build_model(**model_opts)
-#agent.load_weights('mountaincar')
-agent.train(n_epochs=300)
-agent.save_weights('cartpole')
-agent.show_plots(cumulative=True)
+# agent.load_weights('mountain_best')
+agent.train(n_epochs=500)
+agent.save_weights('lunarlander')
+agent.show_plots()
 env.close()
 print('Best Reward:', agent.best_reward)
 
 #Evaluate models
-if path.isfile('best_model.h5'):
+if path.isfile('LunarLander_best.h5.h5'):
   agent = DQAgent(env, **agent_opts)
   agent.build_model(**model_opts)
-  agent.load_weights('best_model')
-  results = agent.evaluate(n_epochs=100, render=False, verbose=False)
-  print('Average Reward over 100 epochs', sum(sum(results,[]))/len(results))
+  agent.load_weights('LunarLander_best.h5')
+  results = agent.evaluate(n_epochs=5, render=True, verbose=True)
+  print('Average Reward over 5 epochs', sum(sum(results,[]))/len(results))

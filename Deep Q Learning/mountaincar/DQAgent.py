@@ -1,4 +1,3 @@
-#most up to date stable version of DQAgent
 # -*- coding: utf-8 -*-
 '''
 Created on Monday July 8, 2019
