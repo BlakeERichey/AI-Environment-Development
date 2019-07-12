@@ -1,6 +1,6 @@
 import gym, os
 from os      import path
-from DQAgent import DQAgent
+from agent.DQAgent import DQAgent
 
 env = gym.make('CartPole-v0')
 
