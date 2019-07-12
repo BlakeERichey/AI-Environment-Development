@@ -234,7 +234,7 @@ class DQAgent(Utilities):
                 if render:
                     self.env.render()
             
-            if verbose:
+            if verbose and epoch % self.show_every == 0:
                 dt = datetime.datetime.now() - start_time
                 t = self.format_time(dt.total_seconds())            
                 results = f'Epoch: {epoch}/{n_epochs-1} | Steps {n_steps} | Cumulative Reward: {sum(rewards)} | Time: {t}'
@@ -397,17 +397,18 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'steps':   200
+                    'reward':  100
                     }
 
         mod_info = None
-        if len(rewards) < self.best_model['steps']:
+        new_score = sum(rewards)
+        if new_score > self.best_model['reward']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
-                'steps':   len(rewards)
+                'reward':  new_score
             }
-        elif len(rewards) == self.best_model['steps'] and loss < self.best_model['loss']:
+        elif new_score == self.best_model['reward'] and loss < self.best_model['loss']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
@@ -415,5 +416,5 @@ class DQAgent(Utilities):
         
         if mod_info:
             self.best_model.update(mod_info)
-            print('New best model reached: {', self.best_model['loss'], self.best_model['steps'], '}')
+            print('New best model reached: {', self.best_model['loss'], self.best_model['reward'], '}')
             self.model.save_weights(self.best_model_file, overwrite=True)

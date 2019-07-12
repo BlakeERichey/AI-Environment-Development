@@ -1,4 +1,3 @@
-#most up to date stable version of DQAgent
 # -*- coding: utf-8 -*-
 '''
 Created on Monday July 8, 2019
@@ -40,7 +39,7 @@ class Utilities():
             'cumulative': [],
         }
 
-    def collect_aggregate_rewards(self,epoch,rewards):
+    def collect_aggregate_rewards(self,epoch,rewards,cumulative=False):
         """Collect rewards statistics."""
 
         min_reward     = min(rewards)
@@ -55,7 +54,7 @@ class Utilities():
             self.aggregate_episode_rewards['max'].append(max_reward)        
             self.aggregate_episode_rewards['average'].append(average_reward)    
     
-    def show_plots(self):
+    def show_plots(self, cumulative=False):
         """Show plots."""
         
         if self.cumulative:
@@ -234,7 +233,7 @@ class DQAgent(Utilities):
                 if render:
                     self.env.render()
             
-            if verbose:
+            if verbose and epoch % self.show_every == 0:
                 dt = datetime.datetime.now() - start_time
                 t = self.format_time(dt.total_seconds())            
                 results = f'Epoch: {epoch}/{n_epochs-1} | Steps {n_steps} | Cumulative Reward: {sum(rewards)} | Time: {t}'
@@ -372,7 +371,7 @@ class DQAgent(Utilities):
                 print(results)
 
             if self.collect_results and epoch % self.aggregate_stats_every == 0:
-                self.collect_aggregate_rewards(epoch, rewards)
+                self.collect_aggregate_rewards(epoch, rewards, self.collect_cumulative)
             
             #save model if desired goal is met
             if self.save_every_epoch:
@@ -397,11 +396,11 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'steps':   200
+                    'steps':   150
                     }
 
         mod_info = None
-        if len(rewards) < self.best_model['steps']:
+        if len(rewards) > self.best_model['steps']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
