@@ -37,13 +37,15 @@ model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accur
 model.load_weights('numbers.h5')
 
 #train the model
-model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=2)
+#model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=2)
 
 #predict first 4 images in the test set
 import numpy as np
-predictions = model.predict(X_test[:4])
+predictions = model.predict(X_test[:30])
 for arr in predictions:
-  print(np.argmax(arr), end = '')
+  print(np.argmax(arr), end = ', ')
+print()
+print(', '.join([str(np.argmax(val)) for val in y_test[:30]]))
 
 model.save_weights('numbers.h5', overwrite=True)
 

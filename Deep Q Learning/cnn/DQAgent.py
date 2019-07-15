@@ -338,8 +338,7 @@ class DQAgent(Utilities):
           batch_size = max(self.batch_size//4, 1),
           verbose=0,
       )
-      loss = self.model.evaluate(inputs, targets, verbose=0)[0]
-      accuracy = self.model.evaluate(inputs, targets, verbose=0)[1]
+      loss, accuracy = self.model.evaluate(inputs, targets, verbose=0)
 
       return loss, accuracy
     
