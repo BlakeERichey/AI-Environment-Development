@@ -41,7 +41,6 @@ model_opts = {
 #Train model
 agent = DQAgent(env, **agent_opts)
 agent.build_model(**model_opts)
-agent.load_weights('mountain_best')
 agent.train(n_epochs=10000)
 agent.save_weights('mountaincar')
 agent.show_plots()
