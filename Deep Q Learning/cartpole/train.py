@@ -37,19 +37,19 @@ model_opts = {
             }
 
 #Train models
-agent = DQAgent(env, **agent_opts)
-agent.build_model(**model_opts)
-#agent.load_weights('mountaincar')
-agent.train(n_epochs=300)
-agent.save_weights('cartpole')
-agent.show_plots(cumulative=True)
-env.close()
-print('Best Reward:', agent.best_reward)
+#agent = DQAgent(env, **agent_opts)
+#agent.build_model(**model_opts)
+##agent.load_weights('mountaincar')
+#agent.train(n_epochs=300)
+#agent.save_weights('cartpole')
+#agent.show_plots(cumulative=True)
+#env.close()
+#print('Best Reward:', agent.best_reward)
 
 #Evaluate models
-if path.isfile('best_model.h5'):
+if path.isfile('results/best_model.h5'):
   agent = DQAgent(env, **agent_opts)
   agent.build_model(**model_opts)
-  agent.load_weights('best_model')
-  results = agent.evaluate(n_epochs=100, render=False, verbose=False)
-  print('Average Reward over 100 epochs', sum(sum(results,[]))/len(results))
+  agent.load_weights('results/best_model')
+  results = agent.evaluate(n_epochs=5, render=True, verbose=True)
+#  print('Average Reward over 100 epochs', sum(sum(results,[]))/len(results))

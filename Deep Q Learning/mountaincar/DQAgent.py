@@ -396,7 +396,7 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'steps':   200
+                    'steps':   150
                     }
 
         mod_info = None
