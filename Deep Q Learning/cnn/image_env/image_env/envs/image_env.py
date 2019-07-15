@@ -30,25 +30,38 @@ class Images(gym.Env):
     self.answer = y_train 
     self.done = False
     self.steps = 0
+    self.max_steps = 60000
 
   def step(self, action):
+    # print('guess:', action, 'answer:', np.argmax(self.answer[self.steps]), action==np.argmax(self.answer[self.steps]))
+    self.action = action
+    if self.steps % 100 == 0:
+      print(self.steps)
     reward = self.get_reward(action)
 
-    self.steps += 1 
-    return self.data[self.steps-1], reward, True, {}
+    self.steps += 1
+    if self.steps >= self.max_steps:
+      self.done = True
+    return self.data[self.steps], reward, self.done, {}
 
     
 
   def reset(self,):
-    return self.data[self.steps]   
+    self.steps = 0
+    self.done = False
+    return self.data[self.steps]
   
   def render(self,):
-    pass
+    print('Guess:', self.action, 'Actual', np.argmax(self.answer[self.steps-1]), 'Reward', self.reward)
   
   def get_reward(self, action):
-    if action == np.argmax(self.answer[self.steps]):
-      reward = 1
-    else:
-      reward = -1
+    if not self.done:
+        
+      if action == np.argmax(self.answer[self.steps]):
+        reward = 1
+      else:
+        reward = -1
+      
+      self.reward = reward
     
-    return reward
+      return reward

@@ -273,7 +273,10 @@ class DQAgent(Utilities):
             rewards = []
             while (not done and n_steps < self.max_steps):
                 prev_envstate = envstate
-                q             = self.model.predict(prev_envstate.reshape(1, -1))
+                if self.model_type == 'cnn':
+                    q             = self.model.predict(prev_envstate.reshape(1, 28, 28, 1))
+                else:
+                    q             = self.model.predict(prev_envstate.reshape(1, -1))
                 action        = np.argmax(q[0])
                 envstate, reward, done, info = self.env.step(action)
                 
@@ -300,9 +303,13 @@ class DQAgent(Utilities):
         '''
         mem_size   = len(self.memory)
         batch_size = min(mem_size, self.batch_size)
-        env_size   = self.memory[0][0].reshape(1, -1).shape[1]
-
-        inputs = np.zeros((batch_size, env_size))
+        if self.model_type == 'cnn':
+            env_size   = self.memory[0][0].reshape(28, 28, 1).shape
+            inputs = np.zeros(( merge_tuple( (batch_size, env_size) ) ))
+        else:
+            env_size   = self.memory[0][0].reshape(1, -1).shape[1]
+            inputs = np.zeros((batch_size, env_size))
+        
         targets = np.zeros((batch_size, self.num_outputs))
         for i, j in enumerate(np.random.choice(range(mem_size), batch_size, replace=False)):
             envstate, action, reward, next_envstate, done, target, Q_sa = self.memory[j]
@@ -319,7 +326,6 @@ class DQAgent(Utilities):
 
     def learn(self): #add callback options?
       inputs, targets = self.get_batch()
-      test_input, test_target = self.get_batch()
       
       callbacks = []
       if self.add_callbacks:
@@ -329,12 +335,13 @@ class DQAgent(Utilities):
           inputs,
           targets,
           callbacks = callbacks,
-          batch_size = self.batch_size//4,
+          batch_size = max(self.batch_size//4, 1),
           verbose=0,
       )
       loss = self.model.evaluate(inputs, targets, verbose=0)[0]
+      accuracy = self.model.evaluate(inputs, targets, verbose=0)[1]
 
-      return loss
+      return loss, accuracy
     
     def load_weights(self, filename):
       '''loads weights from a file'''
@@ -352,6 +359,7 @@ class DQAgent(Utilities):
         if self.action_policy == 'softmax':
             qvals = self.model.predict(envstate.reshape(1, 28, 28, 1))[0]
             qvals = np.asarray(qvals).astype('float64')
+            qvals /= (np.sum(qvals) + 1E-11)   #fix imprecision with numpy sum
             action = np.argmax(np.random.multinomial(1, qvals))
         elif self.action_policy == 'eg': #epsilon greedy
             if np.random.rand() < self.epsilon:
@@ -368,14 +376,14 @@ class DQAgent(Utilities):
 
       envstate, action, reward, next_envstate, done = episode
       if self.action_policy == 'softmax':
-        adj_envstate      = envstate.reshape(1, 28, 28, 1)
-        adj_next_envstate = next_envstate.reshape(1, 28, 28, 1)
+        adj_envstate      = np.asarray(envstate.reshape(1, 28, 28, 1)).astype('float64') #remove float32 imprecision
+        adj_next_envstate = np.asarray(next_envstate.reshape(1, 28, 28, 1)).astype('float64')
         target = self.model.predict(adj_envstate)
         Q_sa   = np.max(self.model.predict(adj_next_envstate))
       else:
         target = self.model.predict(envstate.reshape(1, -1))
         Q_sa   = np.max(self.model.predict(next_envstate.reshape(1, -1)))
-      if reward > self.best_reward.get('Reward', min(reward, 0)):
+      if reward > self.best_reward.get('Reward', min(reward-0.001, 0)):
         self.best_reward = {'Observation': next_envstate, 'Reward': reward}
       
       self.memory.append(episode + [target, Q_sa])
@@ -408,7 +416,7 @@ class DQAgent(Utilities):
                 episode = [prev_envstate, action, reward, envstate, done]
                 self.remember(episode)
 
-                loss = self.learn() #fit model
+                loss, accuracy = self.learn() #fit model
                 rewards.append(reward)
                 n_steps += 1
 
@@ -421,6 +429,7 @@ class DQAgent(Utilities):
             if epoch % self.show_every == 0:
                 results = f'Epoch: {epoch}/{n_epochs-1} | ' +\
                     f'Loss: %.4f | ' % loss +\
+                    f'Accuracy: %.4f | ' % accuracy +\
                     f'Steps {n_steps} | ' +\
                     f'Epsilon: %.3f | ' % self.epsilon +\
                     f'Time: {t}'
@@ -472,3 +481,6 @@ class DQAgent(Utilities):
             self.best_model.update(mod_info)
             print('New best model reached: {', self.best_model['loss'], self.best_model['steps'], '}')
             self.model.save_weights(self.best_model_file, overwrite=True)
+
+def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')
+  return tuple(j for i in arr for j in (i if isinstance(i, tuple) else (i,)))

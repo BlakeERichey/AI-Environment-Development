@@ -39,11 +39,11 @@ model_opts = {
             }
 
 #Train model
-agent = DQAgent(env, **agent_opts)
-agent.build_model(**model_opts)
-agent.train(n_epochs=10000)
-agent.save_weights('mountaincar')
-agent.show_plots()
+#agent = DQAgent(env, **agent_opts)
+#agent.build_model(**model_opts)
+#agent.train(n_epochs=10000)
+#agent.save_weights('mountaincar')
+#agent.show_plots()
 
 #Second run (Improving current solution)
 agent_opts = {
@@ -79,18 +79,18 @@ model_opts = {
             }
 
 #Train models
-agent = DQAgent(env, **agent_opts)
-agent.build_model(**model_opts)
-agent.load_weights('mountain_best')
-agent.train(n_epochs=1000)
-agent.save_weights('mountaincar')
-agent.show_plots()
+#agent = DQAgent(env, **agent_opts)
+#agent.build_model(**model_opts)
+#agent.load_weights('mountain_best')
+#agent.train(n_epochs=1000)
+#agent.save_weights('mountaincar')
+#agent.show_plots()
 
 #Evaluate models
 if path.isfile('mountain_best.h5'):
   agent = DQAgent(env, **agent_opts)
   agent.build_model(**model_opts)
   agent.load_weights('mountain_best')
-  results = agent.evaluate(n_epochs=100, render=False, verbose=False)
-  print('Average Reward over 100 epochs', sum(sum(results,[]))/len(results))
+  results = agent.evaluate(n_epochs=20, render=True, verbose=True)
+#  print('Average Reward over 100 epochs', sum(sum(results,[]))/len(results))
   #Average Reward over 100 epochs -98.55
