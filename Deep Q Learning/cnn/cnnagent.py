@@ -49,11 +49,11 @@ def aitrain():
 
     agent = DQAgent(env, **agent_opts)
     agent.build_model(**model_opts)
-#    agent.load_weights('numbers2')
+    agent.load_weights('numbers2')
     agent.train(n_epochs=1)
-    agent.save_weights('numbers2')
-    agent.max_steps = 500
-    agent.evaluate(n_epochs=1)
+#    agent.save_weights('numbers2')
+#    agent.max_steps = 10
+#    agent.evaluate(n_epochs=1)
     # agent.show_plots()
     env.close()
 

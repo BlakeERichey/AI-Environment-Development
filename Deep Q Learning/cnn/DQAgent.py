@@ -11,10 +11,11 @@ import os, datetime, random
 import numpy             as np
 import tensorflow        as tf
 import matplotlib.pyplot as plt
+from   tensorflow.keras.optimizers import Adam
 from   collections                 import deque
 from   tensorflow.keras            import backend
 from   tensorflow.keras.models     import Sequential
-from   tensorflow.keras.optimizers import Adam
+from   tensorflow.python.client    import device_lib
 from   tensorflow.keras.callbacks  import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers     import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
@@ -485,3 +486,7 @@ class DQAgent(Utilities):
 
 def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')
   return tuple(j for i in arr for j in (i if isinstance(i, tuple) else (i,)))
+
+def get_available_gpus():
+  local_devices = device_lib.list_local_devices()
+  return [x.name for x in local_devices if x.device_type=='GPU']
