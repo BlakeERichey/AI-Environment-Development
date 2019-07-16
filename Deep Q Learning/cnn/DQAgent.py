@@ -89,13 +89,15 @@ class DQAgent(Utilities):
             agent_opts = {
                 #hyperparameters
                 'BATCH_SIZE':              8,
-                'EPSILON_START':         .98,
-                'EPSILON_DECAY':         .98,
                 'DISCOUNT':              .99,
                 'MAX_STEPS':             500,
-                'MIN_EPSILON' :          0.01,
                 'REPLAY_MEMORY_SIZE':    1000,
                 'LEARNING_RATE':         0.001,
+                
+                #ann specific
+                'EPSILON_START':         .98,
+                'EPSILON_DECAY':         .98,
+                'MIN_EPSILON' :          0.01,
 
                 #saving and logging results
                 'AGGREGATE_STATS_EVERY':   5,
@@ -221,8 +223,10 @@ class DQAgent(Utilities):
             elif self.model_type == 'cnn':
               assert self.num_layers >=1, 'Number of layers should be greater than or equal to one!'
 
-              self.activation    = 'softmax'
-              self.action_policy = 'softmax'
+              self.activation     = 'softmax'
+              self.action_policy  = 'softmax'
+              self.envshape       = self.env.observation_space.shape
+              self.batch_envshape = merge_tuple((1, self.envshape))
 
 
               model = Sequential()
@@ -240,7 +244,7 @@ class DQAgent(Utilities):
                 if layer == 0:
                   #input layer
                   model.add(Conv2D(nodes, kernel_size=self.filter_size, activation='relu', \
-                    input_shape=(self.env.observation_space.shape)))
+                    input_shape=(self.envshape)))
                 else:
                   #add hidden layers
                   model.add(Conv2D(nodes, kernel_size=self.filter_size, activation='relu'))
@@ -274,9 +278,9 @@ class DQAgent(Utilities):
             while (not done and n_steps < self.max_steps):
                 prev_envstate = envstate
                 if self.model_type == 'cnn':
-                    q             = self.model.predict(prev_envstate.reshape(1, 28, 28, 1))
+                    q = self.model.predict(prev_envstate.reshape(self.batch_envshape))
                 else:
-                    q             = self.model.predict(prev_envstate.reshape(1, -1))
+                    q = self.model.predict(prev_envstate.reshape(1, -1))
                 action        = np.argmax(q[0])
                 envstate, reward, done, info = self.env.step(action)
                 
@@ -291,11 +295,11 @@ class DQAgent(Utilities):
                 results = f'Epoch: {epoch}/{n_epochs-1} | Steps {n_steps} | Cumulative Reward: {sum(rewards)} | Time: {t}'
                 print(results)
 
-            if not render:
-                total_rewards.append(rewards)
+            
+            total_rewards.append(rewards)
       
         self.env.close()
-        return total_rewards #if render = True, returns empty array (for speed)
+        return total_rewards
 
     def get_batch(self):
         '''
@@ -304,7 +308,7 @@ class DQAgent(Utilities):
         mem_size   = len(self.memory)
         batch_size = min(mem_size, self.batch_size)
         if self.model_type == 'cnn':
-            env_size   = self.memory[0][0].reshape(28, 28, 1).shape
+            env_size   = self.envshape
             inputs = np.zeros(( merge_tuple( (batch_size, env_size) ) ))
         else:
             env_size   = self.memory[0][0].reshape(1, -1).shape[1]
@@ -356,10 +360,8 @@ class DQAgent(Utilities):
         assert self.model, 'Model must be present to make prediction'
 
         if self.action_policy == 'softmax':
-            qvals = self.model.predict(envstate.reshape(1, 28, 28, 1))[0]
-            qvals = np.asarray(qvals).astype('float64')
-            qvals /= (np.sum(qvals) + 1E-11)   #fix imprecision with numpy sum
-            action = np.argmax(np.random.multinomial(1, qvals))
+            qvals = self.model.predict(envstate.reshape(self.batch_envshape))[0]
+            action = np.random.choice(self.num_outputs, p=qvals)
         elif self.action_policy == 'eg': #epsilon greedy
             if np.random.rand() < self.epsilon:
                 action = random.choice(range(self.env.action_space.n))
@@ -375,8 +377,8 @@ class DQAgent(Utilities):
 
       envstate, action, reward, next_envstate, done = episode
       if self.action_policy == 'softmax':
-        adj_envstate      = np.asarray(envstate.reshape(1, 28, 28, 1)).astype('float64') #remove float32 imprecision
-        adj_next_envstate = np.asarray(next_envstate.reshape(1, 28, 28, 1)).astype('float64')
+        adj_envstate      = envstate.reshape(self.batch_envshape)
+        adj_next_envstate = next_envstate.reshape(self.batch_envshape)
         target = self.model.predict(adj_envstate)
         Q_sa   = np.max(self.model.predict(adj_next_envstate))
       else:

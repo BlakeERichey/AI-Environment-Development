@@ -30,7 +30,7 @@ class Images(gym.Env):
     self.answer = y_train 
     self.done = False
     self.steps = 0
-    self.max_steps = 60000
+    self.max_steps = 59999
 
   def step(self, action):
     # print('guess:', action, 'answer:', np.argmax(self.answer[self.steps]), action==np.argmax(self.answer[self.steps]))
@@ -60,7 +60,7 @@ class Images(gym.Env):
       if action == np.argmax(self.answer[self.steps]):
         reward = 1
       else:
-        reward = -1
+        reward = 0
       
       self.reward = reward
     
