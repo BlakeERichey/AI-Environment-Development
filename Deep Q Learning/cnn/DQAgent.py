@@ -89,7 +89,8 @@ class DQAgent(Utilities):
 
             agent_opts = {
                 #hyperparameters
-                'BATCH_SIZE':              8,
+                'REPLAY_BATCH_SIZE':       8,
+                'LEARNING_BATCH_SIZE':     2,
                 'DISCOUNT':              .99,
                 'MAX_STEPS':             500,
                 'REPLAY_MEMORY_SIZE':    1000,
@@ -115,14 +116,15 @@ class DQAgent(Utilities):
         self.weights_file  = kwargs.get('WEIGHTS_FILE',       "")
 
         # Hyperparameters
-        self.batch_size        = kwargs.get('BATCH_SIZE',         8)     # How many steps (samples) to use for training
-        self.max_steps         = kwargs.get('MAX_STEPS',          500)
-        self.epsilon           = kwargs.get('EPSILON_START',      0.98)
-        self.epsilon_decay     = kwargs.get('EPSILON_DECAY',      0.98)
-        self.discount          = kwargs.get('DISCOUNT',           0.99)  #HIGH VALUE = SHORT TERM MEMORY
-        self.replay_size       = kwargs.get('REPLAY_MEMORY_SIZE', 1000)  #steps in memory
-        self.min_epsilon       = kwargs.get('MIN_EPSILON',        0.01)
-        self.learning_rate     = kwargs.get('LEARNING_RATE',      0.001)
+        self.replay_batch_size   = kwargs.get('REPLAY_BATCH_SIZE',    8)   # How many steps (samples) to use for training
+        self.learning_batch_size = kwargs.get('LEARNING_BATCH_SIZE',  2)   # How many steps (samples) to apply to model.fit at a time
+        self.max_steps           = kwargs.get('MAX_STEPS',          500)
+        self.epsilon             = kwargs.get('EPSILON_START',      0.98)
+        self.epsilon_decay       = kwargs.get('EPSILON_DECAY',      0.98)
+        self.discount            = kwargs.get('DISCOUNT',           0.99)  #HIGH VALUE = SHORT TERM MEMORY
+        self.replay_size         = kwargs.get('REPLAY_MEMORY_SIZE', 1000)  #steps in memory
+        self.min_epsilon         = kwargs.get('MIN_EPSILON',        0.01)
+        self.learning_rate       = kwargs.get('LEARNING_RATE',      0.001)
 
         #saving and logging results
         self.save_every_epoch  = kwargs.get('SAVE_EVERY_EPOCH',   False)
@@ -307,7 +309,7 @@ class DQAgent(Utilities):
             Gets previous states to perform a batch fitting
         '''
         mem_size   = len(self.memory)
-        batch_size = min(mem_size, self.batch_size)
+        batch_size = min(mem_size, self.replay_batch_size)
         if self.model_type == 'cnn':
             env_size   = self.envshape
             inputs = np.zeros(( merge_tuple( (batch_size, env_size) ) ))
@@ -340,7 +342,7 @@ class DQAgent(Utilities):
           inputs,
           targets,
           callbacks = callbacks,
-          batch_size = max(self.batch_size//4, 1),
+          batch_size = max(self.learning_batch_size, 1),
           verbose=0,
       )
       loss, accuracy = self.model.evaluate(inputs, targets, verbose=0)
@@ -487,6 +489,7 @@ class DQAgent(Utilities):
 def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')
   return tuple(j for i in arr for j in (i if isinstance(i, tuple) else (i,)))
 
+#not necessary with keras. install tensorflow-gpu instead
 def get_available_gpus():
   local_devices = device_lib.list_local_devices()
   return [x.name for x in local_devices if x.device_type=='GPU']
