@@ -13,5 +13,6 @@ for epoch in range(1):
     action = env.action_space.sample()
     observation, reward, done, info = env.step(action)
     env.render()
+    num_steps += 1
 
 env.close()
