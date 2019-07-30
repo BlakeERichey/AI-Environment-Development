@@ -1,4 +1,4 @@
-import gym
+import gym, random
 from   gym import spaces
 
 import numpy as np
@@ -11,6 +11,7 @@ def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')
 class Images(gym.Env):
 
   def __init__(self):
+    print('Initializing Environment. Aquiring Mnist Data...')
     (X_train, y_train), (X_test, y_test) = mnist.load_data()
 
     shape = X_train[0].shape #(28, 28)
@@ -40,16 +41,16 @@ class Images(gym.Env):
     reward = self.get_reward(action)
 
     self.steps += 1
-    if self.steps >= self.max_steps:
-      self.done = True
-    return self.data[self.steps], reward, self.done, {}
+    self.done = True
+    return self.data[self.index], reward, self.done, {}
 
     
 
   def reset(self,):
-    self.steps = 0
     self.done = False
-    return self.data[self.steps]
+    self.reward = None
+    self.index = random.randrange(0, 60000)
+    return self.data[self.index]
   
   def render(self,):
     print('Guess:', self.action, 'Actual', np.argmax(self.answer[self.steps-1]), 'Reward', self.reward)
@@ -57,7 +58,7 @@ class Images(gym.Env):
   def get_reward(self, action):
     if not self.done:
         
-      if action == np.argmax(self.answer[self.steps]):
+      if action == np.argmax(self.answer[self.index]):
         reward = 1
       else:
         reward = 0

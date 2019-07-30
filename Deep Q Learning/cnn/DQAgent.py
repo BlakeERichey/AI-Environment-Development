@@ -1,4 +1,4 @@
-#most up to date stable version of DQAgent
+#Agent attempting to implement cnns
 # -*- coding: utf-8 -*-
 '''
 Created on Monday July 8, 2019
@@ -314,16 +314,25 @@ class DQAgent(Utilities):
             env_size   = self.envshape
             inputs = np.zeros(( merge_tuple( (batch_size, env_size) ) ))
         else:
-            env_size   = self.memory[0][0].reshape(1, -1).shape[1]
+            env_size   = self.num_features
             inputs = np.zeros((batch_size, env_size))
         
+        batch = random.sample(self.memory, batch_size)
         targets = np.zeros((batch_size, self.num_outputs))
-        for i, j in enumerate(np.random.choice(range(mem_size), batch_size, replace=False)):
-            envstate, action, reward, next_envstate, done, target, Q_sa = self.memory[j]
-            inputs[i] = envstate
-            # targets[i] = self.model.predict(envstate.reshape(1, -1))
-            targets[i] = target
-            # Q_sa = np.max(self.model.predict(next_envstate.reshape(1, -1)))
+        for i, val in enumerate(batch):
+            envstate, action, reward, next_envstate, done = val
+
+            if self.action_policy == 'softmax':
+              adj_envstate = envstate.reshape(self.batch_envshape)
+              adj_next_envstate = next_envstate.reshape(self.batch_envshape)
+            else:
+              adj_envstate = envstate.reshape(1, -1)
+              adj_next_envstate = next_envstate.reshape(1, -1)
+
+            inputs[i] = adj_envstate
+            targets[i] = self.model.predict(adj_envstate)
+            # targets[i] = target
+            Q_sa = np.max(self.model.predict(adj_next_envstate))
             if done:
                 targets[i, action] = reward
             else:
@@ -379,18 +388,19 @@ class DQAgent(Utilities):
       'Add to replay buffer'
 
       envstate, action, reward, next_envstate, done = episode
-      if self.action_policy == 'softmax':
-        adj_envstate      = envstate.reshape(self.batch_envshape)
-        adj_next_envstate = next_envstate.reshape(self.batch_envshape)
-        target = self.model.predict(adj_envstate)
-        Q_sa   = np.max(self.model.predict(adj_next_envstate))
-      else:
-        target = self.model.predict(envstate.reshape(1, -1))
-        Q_sa   = np.max(self.model.predict(next_envstate.reshape(1, -1)))
+      # if self.action_policy == 'softmax':
+      #   adj_envstate      = envstate.reshape(self.batch_envshape)
+      #   adj_next_envstate = next_envstate.reshape(self.batch_envshape)
+      #   target = self.model.predict(adj_envstate)
+      #   Q_sa   = np.max(self.model.predict(adj_next_envstate))
+      # else:
+      #   target = self.model.predict(envstate.reshape(1, -1))
+      #   Q_sa   = np.max(self.model.predict(next_envstate.reshape(1, -1)))
       if reward > self.best_reward.get('Reward', min(reward-0.001, 0)):
         self.best_reward = {'Observation': next_envstate, 'Reward': reward}
       
-      self.memory.append(episode + [target, Q_sa])
+      # self.memory.append(episode + [target, Q_sa])
+      self.memory.append(episode)
       if len(self.memory) > self.replay_size:
         del self.memory[0]
     
@@ -400,7 +410,7 @@ class DQAgent(Utilities):
       self.model.save_weights(h5file, overwrite=True)
       print('Weights saved to:', h5file)
     
-    def train(self, n_epochs=15000, max_steps=0):
+    def train(self, n_epochs=15000, max_steps=0, render=False):
         self.start_time    = datetime.datetime.now()
         print(f'Starting training at {self.start_time}')
         print(f'Action Decision Policy: {self.action_policy}')
@@ -428,6 +438,9 @@ class DQAgent(Utilities):
                 if self.save_every_step:
                     self.is_best(loss, rewards)
 
+                if render:
+                  self.env.render()
+
             dt = datetime.datetime.now() - self.start_time
             t  = self.format_time(dt.total_seconds())
             if epoch % self.show_every == 0:
@@ -436,6 +449,7 @@ class DQAgent(Utilities):
                     f'Accuracy: %.4f | ' % accuracy +\
                     f'Steps {n_steps} | ' +\
                     f'Epsilon: %.3f | ' % self.epsilon +\
+                    f'Reward: %.3f | ' % sum(rewards) +\
                     f'Time: {t}'
                 print(results)
 
