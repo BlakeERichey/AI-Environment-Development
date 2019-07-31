@@ -1,4 +1,4 @@
-#Agent attempting to implement cnns
+#most up to date version of DQAgent
 # -*- coding: utf-8 -*-
 '''
 Created on Monday July 8, 2019
@@ -31,17 +31,18 @@ class Utilities():
         Utilities for agent
     """
     
-    def __init__(self, cumulative=False):
-        self.cumulative = cumulative
+    def __init__(self):
         self.aggregate_episode_rewards = {
             'min':        [],
             'max':        [],
             'epoch':      [],
             'average':    [],
             'cumulative': [],
+            'loss':       [],
+            'accuracy':   [],
         }
 
-    def collect_aggregate_rewards(self,epoch,rewards):
+    def collect_aggregate_rewards(self, epoch, rewards, loss, accuracy):
         """Collect rewards statistics."""
 
         min_reward     = min(rewards)
@@ -49,21 +50,33 @@ class Utilities():
         average_reward = sum(rewards)/len(rewards)
        
         self.aggregate_episode_rewards['epoch'].append(epoch)
-        if hasattr(self, 'cumulative') and self.cumulative:
-            self.aggregate_episode_rewards['cumulative'].append(sum(rewards))
-        else:
-            self.aggregate_episode_rewards['min'].append(min_reward)
-            self.aggregate_episode_rewards['max'].append(max_reward)        
-            self.aggregate_episode_rewards['average'].append(average_reward)    
+        self.aggregate_episode_rewards['cumulative'].append(sum(rewards))
+
+        self.aggregate_episode_rewards['min'].append(min_reward)
+        self.aggregate_episode_rewards['max'].append(max_reward)        
+        self.aggregate_episode_rewards['average'].append(average_reward)   
+
+        self.aggregate_episode_rewards['loss'].append(loss) 
+        self.aggregate_episode_rewards['accuracy'].append(accuracy) 
     
-    def show_plots(self):
+    def show_plots(self, version=None):
         """Show plots."""
-        if hasattr(self, 'cumulative') and self.cumulative:
-            plt.plot(self.aggregate_episode_rewards['epoch'], self.aggregate_episode_rewards['cumulative'], label="cumulative rewards")
-        else:
-            plt.plot(self.aggregate_episode_rewards['epoch'], self.aggregate_episode_rewards['average'], label="average rewards")
-            plt.plot(self.aggregate_episode_rewards['epoch'], self.aggregate_episode_rewards['max'], label="max rewards")
-            plt.plot(self.aggregate_episode_rewards['epoch'], self.aggregate_episode_rewards['min'], label="min rewards")
+        if version == 'cumulative':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+            self.aggregate_episode_rewards['cumulative'], label="cumulative rewards")
+        elif version == 'accuracy':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['accuracy'], label="accuracy")
+        elif version == 'loss':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['loss'], label="loss")
+        elif version == None:
+            plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['average'], label="average rewards")
+            plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['max'], label="max rewards")
+            plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['min'], label="min rewards")
         plt.legend(loc=4)
         plt.show()
     
@@ -105,7 +118,6 @@ class DQAgent(Utilities):
                 'AGGREGATE_STATS_EVERY':   5,
                 'SHOW_EVERY':             10,
                 'COLLECT_RESULTS':      False,
-                'COLLECT_CUMULATIVE':   False,
                 'SAVE_EVERY_EPOCH':     False,
                 'SAVE_EVERY_STEP':      False,
                 'BEST_MODEL_FILE':      'best_model.h5',
@@ -133,7 +145,6 @@ class DQAgent(Utilities):
         
         # Data Recording Variables
         self.collect_results       = kwargs.get('COLLECT_RESULTS',    False)
-        self.collect_cumulative    = kwargs.get('COLLECT_CUMULATIVE', False)
         self.show_every            = kwargs.get('SHOW_EVERY',            10)
         self.aggregate_stats_every = kwargs.get('AGGREGATE_STATS_EVERY',  5)
 
@@ -151,9 +162,9 @@ class DQAgent(Utilities):
         elif self.weights_file:
             self.build_model()
             self.model = model.load_weights(self.weights_file)
-        
+
         if self.collect_results:
-            super().__init__(cumulative=self.collect_cumulative)
+          super().__init__()
 
     def build_model(self, **kwargs):
         '''
@@ -172,6 +183,10 @@ class DQAgent(Utilities):
                 'filter_size':     3,
                 'pool_size':       2,
                 'stride_size':     None,
+
+                #rnn options, only available for cnns
+                'rnn_hidden_layers':     0,
+                'node_per_hidden_layer': [20]
             }
         '''
         if not hasattr(self, 'model'):
@@ -190,11 +205,16 @@ class DQAgent(Utilities):
             self.filter_size     = kwargs.get('filter_size',      3)
             self.stride_size     = kwargs.get('stride_size',      None)
 
+            #rnn options
+            self.rnn_hidden_layers     = kwargs.get('rnn_hidden_layers',       0)
+            self.node_per_hidden_layer = kwargs.get('node_per_hidden_layer', [0])            
+
             self.num_features    = self.env.observation_space.shape[0]
 
             #Create NN
             if self.model_type == 'ann':
-                assert self.num_layers >=1, 'Number of layers should be greater than or equal to one!'
+                assert self.num_layers >=1, \
+                  'Number of layers should be greater than or equal to one!'
 
                 self.activation    = 'linear'
                 self.action_policy = 'eg'
@@ -220,7 +240,7 @@ class DQAgent(Utilities):
                 
                 #output layer
                 model.add(Dense(units = self.num_outputs, activation = self.activation, name='dense_output'))
-                model.compile(optimizer = Adam(lr=self.learning_rate), loss = 'mse', metrics=['accuracy']) #Add loss for cross entropy?
+                model.compile(optimizer = Adam(lr=self.learning_rate), loss = 'mse', metrics=['accuracy'])
                 model.summary()
             
             elif self.model_type == 'cnn':
@@ -254,6 +274,19 @@ class DQAgent(Utilities):
 
               model.add(MaxPooling2D(pool_size=self.pool_size, strides=self.stride_size))
               model.add(Flatten())
+
+              if self.rnn_hidden_layers >= 1:
+                for layer in range(self.rnn_hidden_layers):
+          
+                  try:
+                    nodes=self.node_per_hidden_layer[layer]
+                  except IndexError:
+                    nodes = None
+
+                  if nodes is None:
+                    nodes = self.default_nodes
+                  
+                  model.add(Dense(units = nodes, activation = 'relu'))
               
               #output layer
               model.add(Dense(self.num_outputs, activation='softmax'))
@@ -295,7 +328,10 @@ class DQAgent(Utilities):
             if verbose:
                 dt = datetime.datetime.now() - start_time
                 t = self.format_time(dt.total_seconds())            
-                results = f'Epoch: {epoch}/{n_epochs-1} | Steps {n_steps} | Cumulative Reward: {sum(rewards)} | Time: {t}'
+                results = f'Epoch: {epoch}/{n_epochs-1} | ' + \
+                  f'Steps {n_steps} | ' + \
+                  f'Cumulative Reward: {sum(rewards)} | ' + \
+                  f'Time: {t}'
                 print(results)
 
             
@@ -368,6 +404,7 @@ class DQAgent(Utilities):
         '''
             envstate: envstate to be evaluated
             returns:  given envstate, returns best action model believes to take
+              based on action policy. To be used during training, not evaluation
         '''
         assert self.model, 'Model must be present to make prediction'
 
@@ -386,16 +423,7 @@ class DQAgent(Utilities):
 
     def remember(self, episode):
       'Add to replay buffer'
-
       envstate, action, reward, next_envstate, done = episode
-      # if self.action_policy == 'softmax':
-      #   adj_envstate      = envstate.reshape(self.batch_envshape)
-      #   adj_next_envstate = next_envstate.reshape(self.batch_envshape)
-      #   target = self.model.predict(adj_envstate)
-      #   Q_sa   = np.max(self.model.predict(adj_next_envstate))
-      # else:
-      #   target = self.model.predict(envstate.reshape(1, -1))
-      #   Q_sa   = np.max(self.model.predict(next_envstate.reshape(1, -1)))
       if reward > self.best_reward.get('Reward', min(reward-0.001, 0)):
         self.best_reward = {'Observation': next_envstate, 'Reward': reward}
       
@@ -454,7 +482,7 @@ class DQAgent(Utilities):
                 print(results)
 
             if self.collect_results and epoch % self.aggregate_stats_every == 0:
-                self.collect_aggregate_rewards(epoch, rewards)
+                self.collect_aggregate_rewards(epoch, rewards, loss, accuracy)
             
             #save model if desired goal is met
             if self.save_every_epoch:
@@ -479,29 +507,25 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'accuracy':   .85
+                    'steps':   100
                     }
-            
-        inputs = self.env.validation[0:5000]
-        targets = self.env.validation_answers[0:5000]
-        loss, accuracy = self.model.evaluate(inputs, targets, verbose = 0)
 
         mod_info = None
-        if accuracy > self.best_model['accuracy']:
+        if len(rewards) > self.best_model['steps']:
             mod_info = {
-                'weights':    self.model.get_weights(),
-                'loss':       loss,
-                'accuracy':   accuracy
+                'weights': self.model.get_weights(),
+                'loss':    loss,
+                'steps':   len(rewards)
             }
-        elif accuracy == self.best_model['accuracy'] and loss < self.best_model['loss']:
+        elif len(rewards) == self.best_model['steps'] and loss < self.best_model['loss']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
             }
-
+        
         if mod_info:
             self.best_model.update(mod_info)
-            print('New best model reached: {', self.best_model['loss'], self.best_model['accuracy'], '}')
+            print('New best model reached: {', self.best_model['loss'], self.best_model['steps'], '}')
             self.model.save_weights(self.best_model_file, overwrite=True)
 
 def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')

@@ -56,7 +56,7 @@ def train_model(agent_opts, model_opts):
     agent = DQAgent(env, **agent_opts)
     agent.build_model(**model_opts)
     # agent.load_weights('./agent/results/best_model')
-    agent.train(n_epochs=1000, render=False)
+    agent.train(n_epochs=300, render=False)
     agent.save_weights('./agent/results/cnnagent')
     agent.show_plots()
     agent.show_plots('cumulative')
