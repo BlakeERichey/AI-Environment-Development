@@ -59,15 +59,11 @@ class Utilities():
     def show_plots(self):
         """Show plots."""
         if hasattr(self, 'cumulative') and self.cumulative:
-            plt.plot(self.aggregate_episode_rewards['epoch'], \
-              self.aggregate_episode_rewards['cumulative'], label="cumulative rewards")
+            plt.plot(self.aggregate_episode_rewards['epoch'], self.aggregate_episode_rewards['cumulative'], label="cumulative rewards")
         else:
-            plt.plot(self.aggregate_episode_rewards['epoch'], \
-              self.aggregate_episode_rewards['average'], label="average rewards")
-            plt.plot(self.aggregate_episode_rewards['epoch'], \
-              self.aggregate_episode_rewards['max'], label="max rewards")
-            plt.plot(self.aggregate_episode_rewards['epoch'], \
-              self.aggregate_episode_rewards['min'], label="min rewards")
+            plt.plot(self.aggregate_episode_rewards['epoch'], self.aggregate_episode_rewards['average'], label="average rewards")
+            plt.plot(self.aggregate_episode_rewards['epoch'], self.aggregate_episode_rewards['max'], label="max rewards")
+            plt.plot(self.aggregate_episode_rewards['epoch'], self.aggregate_episode_rewards['min'], label="min rewards")
         plt.legend(loc=4)
         plt.show()
     
@@ -198,8 +194,7 @@ class DQAgent(Utilities):
 
             #Create NN
             if self.model_type == 'ann':
-                assert self.num_layers >=1, \
-                  'Number of layers should be greater than or equal to one!'
+                assert self.num_layers >=1, 'Number of layers should be greater than or equal to one!'
 
                 self.activation    = 'linear'
                 self.action_policy = 'eg'
@@ -225,7 +220,7 @@ class DQAgent(Utilities):
                 
                 #output layer
                 model.add(Dense(units = self.num_outputs, activation = self.activation, name='dense_output'))
-                model.compile(optimizer = Adam(lr=self.learning_rate), loss = 'mse', metrics=['accuracy'])
+                model.compile(optimizer = Adam(lr=self.learning_rate), loss = 'mse', metrics=['accuracy']) #Add loss for cross entropy?
                 model.summary()
             
             elif self.model_type == 'cnn':
@@ -300,10 +295,7 @@ class DQAgent(Utilities):
             if verbose:
                 dt = datetime.datetime.now() - start_time
                 t = self.format_time(dt.total_seconds())            
-                results = f'Epoch: {epoch}/{n_epochs-1} | ' + \
-                  f'Steps {n_steps} | ' + \
-                  f'Cumulative Reward: {sum(rewards)} | ' + \
-                  f'Time: {t}'
+                results = f'Epoch: {epoch}/{n_epochs-1} | Steps {n_steps} | Cumulative Reward: {sum(rewards)} | Time: {t}'
                 print(results)
 
             
@@ -376,7 +368,6 @@ class DQAgent(Utilities):
         '''
             envstate: envstate to be evaluated
             returns:  given envstate, returns best action model believes to take
-              based on action policy. To be used during training, not evaluation
         '''
         assert self.model, 'Model must be present to make prediction'
 
@@ -395,7 +386,16 @@ class DQAgent(Utilities):
 
     def remember(self, episode):
       'Add to replay buffer'
+
       envstate, action, reward, next_envstate, done = episode
+      # if self.action_policy == 'softmax':
+      #   adj_envstate      = envstate.reshape(self.batch_envshape)
+      #   adj_next_envstate = next_envstate.reshape(self.batch_envshape)
+      #   target = self.model.predict(adj_envstate)
+      #   Q_sa   = np.max(self.model.predict(adj_next_envstate))
+      # else:
+      #   target = self.model.predict(envstate.reshape(1, -1))
+      #   Q_sa   = np.max(self.model.predict(next_envstate.reshape(1, -1)))
       if reward > self.best_reward.get('Reward', min(reward-0.001, 0)):
         self.best_reward = {'Observation': next_envstate, 'Reward': reward}
       
@@ -479,25 +479,29 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'steps':   100
+                    'accuracy':   .85
                     }
+            
+        inputs = self.env.validation[0:5000]
+        targets = self.env.validation_answers[0:5000]
+        loss, accuracy = self.model.evaluate(inputs, targets, verbose = 0)
 
         mod_info = None
-        if len(rewards) > self.best_model['steps']:
+        if accuracy > self.best_model['accuracy']:
+            mod_info = {
+                'weights':    self.model.get_weights(),
+                'loss':       loss,
+                'accuracy':   accuracy
+            }
+        elif accuracy == self.best_model['accuracy'] and loss < self.best_model['loss']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
-                'steps':   len(rewards)
             }
-        elif len(rewards) == self.best_model['steps'] and loss < self.best_model['loss']:
-            mod_info = {
-                'weights': self.model.get_weights(),
-                'loss':    loss,
-            }
-        
+
         if mod_info:
             self.best_model.update(mod_info)
-            print('New best model reached: {', self.best_model['loss'], self.best_model['steps'], '}')
+            print('New best model reached: {', self.best_model['loss'], self.best_model['accuracy'], '}')
             self.model.save_weights(self.best_model_file, overwrite=True)
 
 def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')

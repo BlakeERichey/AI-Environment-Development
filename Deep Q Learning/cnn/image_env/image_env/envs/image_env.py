@@ -27,6 +27,9 @@ class Images(gym.Env):
     #one-hot encode target column
     y_train = to_categorical(y_train)
     y_test = to_categorical(y_test)
+    
+    self.validation = X_test
+    self.validation_answers = y_test
 
     self.answer = y_train 
     self.done = False
