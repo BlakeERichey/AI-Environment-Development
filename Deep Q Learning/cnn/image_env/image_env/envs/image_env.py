@@ -53,7 +53,7 @@ class Images(gym.Env):
     return self.data[self.index]
   
   def render(self,):
-    print('Guess:', self.action, 'Actual', np.argmax(self.answer[self.steps-1]), 'Reward', self.reward)
+    print('Guess:', self.action, 'Actual', np.argmax(self.answer[self.index]), 'Reward', self.reward)
   
   def get_reward(self, action):
     if not self.done:
