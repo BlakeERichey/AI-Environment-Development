@@ -5,40 +5,40 @@ from os      import path
 from agent.DQAgent import DQAgent
 from BRprofiler import profile
 
-env = gym.make('image_env-v0')
+env = gym.make('CartPole-v0')
 
 agent_opts = {
                 #hyperparameters
-                'REPLAY_BATCH_SIZE':       16,
+                'REPLAY_BATCH_SIZE':      32,
                 'LEARNING_BATCH_SIZE':     4,
-                'DISCOUNT':              .99,
-                'MAX_STEPS':             500,
-                'REPLAY_MEMORY_SIZE':    64,
-                'LEARNING_RATE':         0.001,
+                'DISCOUNT':              .90,
+                'MAX_STEPS':             200,
+                'REPLAY_MEMORY_SIZE':    500,
+                'LEARNING_RATE':         0.01,
                 
                 #ann specific
-                'EPSILON_START':         .98,
+                'EPSILON_START':         .99,
                 'EPSILON_DECAY':         .98,
-                'MIN_EPSILON' :          0.01,
+                'MIN_EPSILON' :          0.1,
 
                 #saving and logging results
-                'AGGREGATE_STATS_EVERY':   5,
-                'SHOW_EVERY':             5,
+                'AGGREGATE_STATS_EVERY':  5,
+                'SHOW_EVERY':             2,
                 'COLLECT_RESULTS':      True,
-                'COLLECT_CUMULATIVE':   False,
-                'SAVE_EVERY_EPOCH':     False,
+                'COLLECT_CUMULATIVE':   True,
+                'SAVE_EVERY_EPOCH':     True,
                 'SAVE_EVERY_STEP':      False,
-                'BEST_MODEL_FILE':      './agent/results/best_model.h5',
+                'BEST_MODEL_FILE':      './agent/results/cartpole_best.h5',
             } 
 
 model_opts = {
-                'num_layers':      3,
+                'num_layers':      2,
                 'default_nodes':   20,
                 'dropout_rate':    0.5,
-                'model_type':      'cnn',
+                'model_type':      'ann',
                 'add_dropout':     False,
                 'add_callbacks':   False,
-                'nodes_per_layer': [20,20,20],
+                'nodes_per_layer': [10,10],
 
                 #cnn options
                 'filter_size':     3,
@@ -51,8 +51,8 @@ def train_model(agent_opts, model_opts):
     agent = DQAgent(env, **agent_opts)
     agent.build_model(**model_opts)
     # agent.load_weights('./agent/results/best_model')
-    agent.train(n_epochs=100, render=False)
-    agent.save_weights('./agent/results/cnnagent')
+    agent.train(n_epochs=200, render=False)
+    agent.save_weights('./agent/results/cartpole')
     agent.show_plots()
     env.close()
 
@@ -64,9 +64,9 @@ def evaluate_model(agent_opts, model_opts, best_model=True):
       filename = agent_opts.get('BEST_MODEL_FILE')[:-3]
       agent.load_weights(filename)
     else:
-      agent.load_weights('./agent/results/cnnagent')
+      agent.load_weights('./agent/results/cartpole')
     results = agent.evaluate(50, render=False)
-#    print(sum(sum(results,[]))/len(results))
+    print(sum(sum(results,[]))/len(results))
 
-train_model(agent_opts, model_opts)
-# evaluate_model(agent_opts, model_opts, best_model=True)
+#train_model(agent_opts, model_opts)
+evaluate_model(agent_opts, model_opts, best_model=False)

@@ -395,6 +395,7 @@ class DQAgent(Utilities):
 
     def remember(self, episode):
       'Add to replay buffer'
+      envstate, action, reward, next_envstate, done = episode
       if reward > self.best_reward.get('Reward', min(reward-0.001, 0)):
         self.best_reward = {'Observation': next_envstate, 'Reward': reward}
       
@@ -478,11 +479,11 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'steps':   200
+                    'steps':   100
                     }
 
         mod_info = None
-        if len(rewards) < self.best_model['steps']:
+        if len(rewards) > self.best_model['steps']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
