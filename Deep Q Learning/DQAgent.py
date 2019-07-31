@@ -31,17 +31,18 @@ class Utilities():
         Utilities for agent
     """
     
-    def __init__(self, cumulative=False):
-        self.cumulative = cumulative
+    def __init__(self):
         self.aggregate_episode_rewards = {
             'min':        [],
             'max':        [],
             'epoch':      [],
             'average':    [],
             'cumulative': [],
+            'loss':       [],
+            'accuracy':   [],
         }
 
-    def collect_aggregate_rewards(self,epoch,rewards):
+    def collect_aggregate_rewards(self, epoch, rewards, loss, accuracy):
         """Collect rewards statistics."""
 
         min_reward     = min(rewards)
@@ -49,19 +50,27 @@ class Utilities():
         average_reward = sum(rewards)/len(rewards)
        
         self.aggregate_episode_rewards['epoch'].append(epoch)
-        if hasattr(self, 'cumulative') and self.cumulative:
-            self.aggregate_episode_rewards['cumulative'].append(sum(rewards))
-        else:
-            self.aggregate_episode_rewards['min'].append(min_reward)
-            self.aggregate_episode_rewards['max'].append(max_reward)        
-            self.aggregate_episode_rewards['average'].append(average_reward)    
+        self.aggregate_episode_rewards['cumulative'].append(sum(rewards))
+
+        self.aggregate_episode_rewards['min'].append(min_reward)
+        self.aggregate_episode_rewards['max'].append(max_reward)        
+        self.aggregate_episode_rewards['average'].append(average_reward)   
+
+        self.aggregate_episode_rewards['loss'].append(loss) 
+        self.aggregate_episode_rewards['accuracy'].append(accuracy) 
     
-    def show_plots(self):
+    def show_plots(self, version=None):
         """Show plots."""
-        if hasattr(self, 'cumulative') and self.cumulative:
-            plt.plot(self.aggregate_episode_rewards['epoch'], \
-              self.aggregate_episode_rewards['cumulative'], label="cumulative rewards")
-        else:
+        if version == 'cumulative':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+            self.aggregate_episode_rewards['cumulative'], label="cumulative rewards")
+        elif version == 'accuracy':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['accuracy'], label="accuracy")
+        elif version == 'loss':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['loss'], label="loss")
+        elif version == None:
             plt.plot(self.aggregate_episode_rewards['epoch'], \
               self.aggregate_episode_rewards['average'], label="average rewards")
             plt.plot(self.aggregate_episode_rewards['epoch'], \
@@ -109,7 +118,6 @@ class DQAgent(Utilities):
                 'AGGREGATE_STATS_EVERY':   5,
                 'SHOW_EVERY':             10,
                 'COLLECT_RESULTS':      False,
-                'COLLECT_CUMULATIVE':   False,
                 'SAVE_EVERY_EPOCH':     False,
                 'SAVE_EVERY_STEP':      False,
                 'BEST_MODEL_FILE':      'best_model.h5',
@@ -137,7 +145,6 @@ class DQAgent(Utilities):
         
         # Data Recording Variables
         self.collect_results       = kwargs.get('COLLECT_RESULTS',    False)
-        self.collect_cumulative    = kwargs.get('COLLECT_CUMULATIVE', False)
         self.show_every            = kwargs.get('SHOW_EVERY',            10)
         self.aggregate_stats_every = kwargs.get('AGGREGATE_STATS_EVERY',  5)
 
@@ -155,9 +162,6 @@ class DQAgent(Utilities):
         elif self.weights_file:
             self.build_model()
             self.model = model.load_weights(self.weights_file)
-        
-        if self.collect_results:
-            super().__init__(cumulative=self.collect_cumulative)
 
     def build_model(self, **kwargs):
         '''
@@ -475,7 +479,7 @@ class DQAgent(Utilities):
                 print(results)
 
             if self.collect_results and epoch % self.aggregate_stats_every == 0:
-                self.collect_aggregate_rewards(epoch, rewards)
+                self.collect_aggregate_rewards(epoch, rewards, loss, accuracy)
             
             #save model if desired goal is met
             if self.save_every_epoch:
