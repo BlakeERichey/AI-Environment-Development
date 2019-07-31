@@ -1,7 +1,3 @@
-add working softmax
-add cnn
-implement eligibility trace
-
-implement early stopping, modelscheckpoint:
-
-https://chrisalbon.com/deep_learning/keras/neural_network_early_stopping/
+Add Eligibility Trace to better enable an AI to have long-term goals  
+Add target/training network implementation
+Add rnn for cnns

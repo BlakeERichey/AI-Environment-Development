@@ -3,6 +3,24 @@ Goal
 
 To create a dynamic reusable class for NN development and testing
 
+Directory Structure
+---
+
+* CNN  
+A project focused on implementing a dynamic cnn creation class. Used to solve 
+mnist data on numbers using unsupervised learning.  
+
+* Cartpole  
+A project to test the ability of the DQAgent class to test if it can solve the 
+[CartPole-v0](https://gym.openai.com/envs/CartPole-v0/) problem from OpenAI Gym.  
+
+* MountainCar  
+A significantly harder problem implementing DQAgent attempting to solve the 
+[MountainCar-v0](https://gym.openai.com/envs/MountainCar-v0/) problem
+
+* DQAgent  
+Dynamic class for NN generation
+
 Test
 ---
 
@@ -16,14 +34,11 @@ Solution reached in 11000 episodes
 
 Requirements
 ---
-pip install gym  
-pip install numpy  
-pip install keras  
-pip install tensorflow  
+gym, numpy, keras, tensorflow  
 
 Todo
 ---
 
-Add CNNs as an option to the class  
 Add Eligibility Trace to better enable an AI to have long-term goals  
-Implement GPU utilization for faster solutions solving time
+Add target/training network implementation
+Add rnn for cnns
