@@ -1,4 +1,4 @@
-#most up to date version of DQAgent
+#attempting rnns and updating graphs
 # -*- coding: utf-8 -*-
 '''
 Created on Monday July 8, 2019
@@ -183,10 +183,6 @@ class DQAgent(Utilities):
                 'filter_size':     3,
                 'pool_size':       2,
                 'stride_size':     None,
-
-                #rnn options, only available for cnns
-                'rnn_hidden_layers':     0,
-                'node_per_hidden_layer': [20]
             }
         '''
         if not hasattr(self, 'model'):
@@ -203,11 +199,7 @@ class DQAgent(Utilities):
             #cnn options
             self.pool_size       = kwargs.get('pool_size',        2)
             self.filter_size     = kwargs.get('filter_size',      3)
-            self.stride_size     = kwargs.get('stride_size',      None)
-
-            #rnn options
-            self.rnn_hidden_layers     = kwargs.get('rnn_hidden_layers',       0)
-            self.node_per_hidden_layer = kwargs.get('node_per_hidden_layer', [0])            
+            self.stride_size     = kwargs.get('stride_size',      None)        
 
             self.num_features    = self.env.observation_space.shape[0]
 
@@ -274,20 +266,6 @@ class DQAgent(Utilities):
 
               model.add(MaxPooling2D(pool_size=self.pool_size, strides=self.stride_size))
               model.add(Flatten())
-
-              if self.rnn_hidden_layers >= 1:
-                for layer in range(self.rnn_hidden_layers):
-          
-                  try:
-                    nodes=self.node_per_hidden_layer[layer]
-                  except IndexError:
-                    nodes = None
-
-                  if nodes is None:
-                    nodes = self.default_nodes
-                  
-                  model.add(Dense(units = nodes, activation = 'relu'))
-              
               #output layer
               model.add(Dense(self.num_outputs, activation='softmax'))
 
@@ -368,10 +346,10 @@ class DQAgent(Utilities):
             inputs[i] = adj_envstate
             targets[i] = self.model.predict(adj_envstate)
             # targets[i] = target
-            Q_sa = np.max(self.model.predict(adj_next_envstate))
             if done:
                 targets[i, action] = reward
             else:
+                Q_sa = np.max(self.model.predict(adj_next_envstate))
                 # reward + gamma * max_a' Q(s', a')
                 targets[i, action] = reward + self.discount * Q_sa
         return inputs, targets
@@ -498,7 +476,6 @@ class DQAgent(Utilities):
         Used to define best results. Will most likely need to be changed
         between each environment as the goal is different for every
         environment
-
         Result: Saves best model to a backup file `self.best_model_file`
         '''
 
@@ -507,25 +484,32 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'steps':   100
+                    'accuracy':   .8
                     }
+            
+        inputs = self.env.validation[0:5000]
+        targets = self.env.validation_answers[0:5000]
+        if hasattr(self, 'target_model'):
+          loss, accuracy = self.target_model.evaluate(inputs, targets, verbose = 0)
+        else:
+          loss, accuracy = self.model.evaluate(inputs, targets, verbose = 0)
 
         mod_info = None
-        if len(rewards) > self.best_model['steps']:
+        if accuracy > self.best_model['accuracy']:
+            mod_info = {
+                'weights':    self.model.get_weights(),
+                'loss':       loss,
+                'accuracy':   accuracy
+            }
+        elif accuracy == self.best_model['accuracy'] and loss < self.best_model['loss']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
-                'steps':   len(rewards)
             }
-        elif len(rewards) == self.best_model['steps'] and loss < self.best_model['loss']:
-            mod_info = {
-                'weights': self.model.get_weights(),
-                'loss':    loss,
-            }
-        
+
         if mod_info:
             self.best_model.update(mod_info)
-            print('New best model reached: {', self.best_model['loss'], self.best_model['steps'], '}')
+            print('New best model reached: {', self.best_model['loss'], self.best_model['accuracy'], '}')
             self.model.save_weights(self.best_model_file, overwrite=True)
 
 def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')

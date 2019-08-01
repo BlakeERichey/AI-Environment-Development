@@ -25,7 +25,7 @@ agent_opts = {
 
                 #saving and logging results
                 'AGGREGATE_STATS_EVERY':  5,
-                'SHOW_EVERY':             25,
+                'SHOW_EVERY':             1,
                 'COLLECT_RESULTS':      True,
                 'SAVE_EVERY_EPOCH':     False,
                 'SAVE_EVERY_STEP':      False,
@@ -39,16 +39,20 @@ model_opts = {
                 'model_type':      'cnn',
                 'add_dropout':     False,
                 'add_callbacks':   False,
-                'nodes_per_layer': [64,32,32],
+                'nodes_per_layer': [20,20,20],
 
                 #cnn options
                 'filter_size':     3,
                 'pool_size':       2,
                 'stride_size':     None,
-    
+
                 #rnn options, only available for cnns
-                'rnn_hidden_layers':     3,
-                'node_per_hidden_layer': [20, 20, 20]
+                'rnn_hidden_layers':     0,
+                'node_per_hidden_layer': [20],
+
+                #Target model inclusion
+                'include_target_model': True,
+                'update_target_every':  5,
             }
 
 # Train models
@@ -59,7 +63,7 @@ def train_model(agent_opts, model_opts):
     agent.train(n_epochs=300, render=False)
     agent.save_weights('./agent/results/cnnagent')
     agent.show_plots()
-    agent.show_plots('cumulative')
+    agent.show_plots('loss')
     agent.show_plots('accuracy')
     env.close()
 
@@ -75,5 +79,8 @@ def evaluate_model(agent_opts, model_opts, best_model=True):
     results = agent.evaluate(50, render=False)
 #    print(sum(sum(results,[]))/len(results))
 
-train_model(agent_opts, model_opts)
+#train_model(agent_opts, model_opts)
 # evaluate_model(agent_opts, model_opts, best_model=True)
+
+agent = DQAgent(env, **agent_opts)
+agent.build_model(**model_opts)

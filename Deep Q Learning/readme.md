@@ -40,5 +40,5 @@ Todo
 ---
 
 Add Eligibility Trace to better enable an AI to have long-term goals  
-Add target/training network implementation  
-Add rnn for cnns
+Add rnns  
+Investigate A3C  
