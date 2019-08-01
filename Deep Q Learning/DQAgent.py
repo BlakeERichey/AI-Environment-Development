@@ -1,4 +1,4 @@
-#most up to date version of DQAgent
+#Most up to date version of DQAgent
 # -*- coding: utf-8 -*-
 '''
 Created on Monday July 8, 2019
@@ -31,17 +31,18 @@ class Utilities():
         Utilities for agent
     """
     
-    def __init__(self, cumulative=False):
-        self.cumulative = cumulative
+    def __init__(self):
         self.aggregate_episode_rewards = {
             'min':        [],
             'max':        [],
             'epoch':      [],
             'average':    [],
             'cumulative': [],
+            'loss':       [],
+            'accuracy':   [],
         }
 
-    def collect_aggregate_rewards(self,epoch,rewards):
+    def collect_aggregate_rewards(self, epoch, rewards, loss, accuracy):
         """Collect rewards statistics."""
 
         min_reward     = min(rewards)
@@ -49,19 +50,27 @@ class Utilities():
         average_reward = sum(rewards)/len(rewards)
        
         self.aggregate_episode_rewards['epoch'].append(epoch)
-        if hasattr(self, 'cumulative') and self.cumulative:
-            self.aggregate_episode_rewards['cumulative'].append(sum(rewards))
-        else:
-            self.aggregate_episode_rewards['min'].append(min_reward)
-            self.aggregate_episode_rewards['max'].append(max_reward)        
-            self.aggregate_episode_rewards['average'].append(average_reward)    
+        self.aggregate_episode_rewards['cumulative'].append(sum(rewards))
+
+        self.aggregate_episode_rewards['min'].append(min_reward)
+        self.aggregate_episode_rewards['max'].append(max_reward)        
+        self.aggregate_episode_rewards['average'].append(average_reward)   
+
+        self.aggregate_episode_rewards['loss'].append(loss) 
+        self.aggregate_episode_rewards['accuracy'].append(accuracy) 
     
-    def show_plots(self):
+    def show_plots(self, version=None):
         """Show plots."""
-        if hasattr(self, 'cumulative') and self.cumulative:
-            plt.plot(self.aggregate_episode_rewards['epoch'], \
-              self.aggregate_episode_rewards['cumulative'], label="cumulative rewards")
-        else:
+        if version == 'cumulative':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+            self.aggregate_episode_rewards['cumulative'], label="cumulative rewards")
+        elif version == 'accuracy':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['accuracy'], label="accuracy")
+        elif version == 'loss':
+          plt.plot(self.aggregate_episode_rewards['epoch'], \
+              self.aggregate_episode_rewards['loss'], label="loss")
+        elif version == None:
             plt.plot(self.aggregate_episode_rewards['epoch'], \
               self.aggregate_episode_rewards['average'], label="average rewards")
             plt.plot(self.aggregate_episode_rewards['epoch'], \
@@ -109,7 +118,6 @@ class DQAgent(Utilities):
                 'AGGREGATE_STATS_EVERY':   5,
                 'SHOW_EVERY':             10,
                 'COLLECT_RESULTS':      False,
-                'COLLECT_CUMULATIVE':   False,
                 'SAVE_EVERY_EPOCH':     False,
                 'SAVE_EVERY_STEP':      False,
                 'BEST_MODEL_FILE':      'best_model.h5',
@@ -137,7 +145,6 @@ class DQAgent(Utilities):
         
         # Data Recording Variables
         self.collect_results       = kwargs.get('COLLECT_RESULTS',    False)
-        self.collect_cumulative    = kwargs.get('COLLECT_CUMULATIVE', False)
         self.show_every            = kwargs.get('SHOW_EVERY',            10)
         self.aggregate_stats_every = kwargs.get('AGGREGATE_STATS_EVERY',  5)
 
@@ -155,9 +162,9 @@ class DQAgent(Utilities):
         elif self.weights_file:
             self.build_model()
             self.model = model.load_weights(self.weights_file)
-        
+
         if self.collect_results:
-            super().__init__(cumulative=self.collect_cumulative)
+          super().__init__()
 
     def build_model(self, **kwargs):
         '''
@@ -192,7 +199,7 @@ class DQAgent(Utilities):
             #cnn options
             self.pool_size       = kwargs.get('pool_size',        2)
             self.filter_size     = kwargs.get('filter_size',      3)
-            self.stride_size     = kwargs.get('stride_size',      None)
+            self.stride_size     = kwargs.get('stride_size',      None)        
 
             self.num_features    = self.env.observation_space.shape[0]
 
@@ -259,7 +266,6 @@ class DQAgent(Utilities):
 
               model.add(MaxPooling2D(pool_size=self.pool_size, strides=self.stride_size))
               model.add(Flatten())
-              
               #output layer
               model.add(Dense(self.num_outputs, activation='softmax'))
 
@@ -340,10 +346,10 @@ class DQAgent(Utilities):
             inputs[i] = adj_envstate
             targets[i] = self.model.predict(adj_envstate)
             # targets[i] = target
-            Q_sa = np.max(self.model.predict(adj_next_envstate))
             if done:
                 targets[i, action] = reward
             else:
+                Q_sa = np.max(self.model.predict(adj_next_envstate))
                 # reward + gamma * max_a' Q(s', a')
                 targets[i, action] = reward + self.discount * Q_sa
         return inputs, targets
@@ -454,7 +460,7 @@ class DQAgent(Utilities):
                 print(results)
 
             if self.collect_results and epoch % self.aggregate_stats_every == 0:
-                self.collect_aggregate_rewards(epoch, rewards)
+                self.collect_aggregate_rewards(epoch, rewards, loss, accuracy)
             
             #save model if desired goal is met
             if self.save_every_epoch:
@@ -470,7 +476,6 @@ class DQAgent(Utilities):
         Used to define best results. Will most likely need to be changed
         between each environment as the goal is different for every
         environment
-
         Result: Saves best model to a backup file `self.best_model_file`
         '''
 
@@ -479,25 +484,32 @@ class DQAgent(Utilities):
             self.best_model = {
                     'weights': self.model.get_weights(),
                     'loss':    loss,
-                    'steps':   100
+                    'accuracy':   .8
                     }
+            
+        inputs = self.env.validation[0:5000]
+        targets = self.env.validation_answers[0:5000]
+        if hasattr(self, 'target_model'):
+          loss, accuracy = self.target_model.evaluate(inputs, targets, verbose = 0)
+        else:
+          loss, accuracy = self.model.evaluate(inputs, targets, verbose = 0)
 
         mod_info = None
-        if len(rewards) > self.best_model['steps']:
+        if accuracy > self.best_model['accuracy']:
+            mod_info = {
+                'weights':    self.model.get_weights(),
+                'loss':       loss,
+                'accuracy':   accuracy
+            }
+        elif accuracy == self.best_model['accuracy'] and loss < self.best_model['loss']:
             mod_info = {
                 'weights': self.model.get_weights(),
                 'loss':    loss,
-                'steps':   len(rewards)
             }
-        elif len(rewards) == self.best_model['steps'] and loss < self.best_model['loss']:
-            mod_info = {
-                'weights': self.model.get_weights(),
-                'loss':    loss,
-            }
-        
+
         if mod_info:
             self.best_model.update(mod_info)
-            print('New best model reached: {', self.best_model['loss'], self.best_model['steps'], '}')
+            print('New best model reached: {', self.best_model['loss'], self.best_model['accuracy'], '}')
             self.model.save_weights(self.best_model_file, overwrite=True)
 
 def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')
