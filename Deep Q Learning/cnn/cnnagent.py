@@ -27,7 +27,7 @@ agent_opts = {
                 'AGGREGATE_STATS_EVERY':  500,
                 'SHOW_EVERY':             100,
                 'COLLECT_RESULTS':      True,
-                'SAVE_EVERY_EPOCH':     False,
+                'SAVE_EVERY_EPOCH':     True,
                 'SAVE_EVERY_STEP':      False,
                 'BEST_MODEL_FILE':      f'{root_path}best_model.h5',
             } 
@@ -51,8 +51,8 @@ model_opts = {
 def train_model(agent_opts, model_opts):
     agent = DQAgent(env, **agent_opts)
     agent.build_model(**model_opts)
-    # agent.load_weights('./agent/results/best_model')
-    agent.train(n_epochs=130000, render=False)
+    agent.load_weights('./agent/results/cnnagent')
+    agent.train(n_epochs=80000, render=False)
     agent.save_weights('./agent/results/cnnagent')
     agent.show_plots()
     agent.show_plots('loss')
@@ -68,8 +68,8 @@ def evaluate_model(agent_opts, model_opts, best_model=True):
       agent.load_weights(filename)
     else:
       agent.load_weights('./agent/results/cnnagent')
-    results = agent.evaluate(50, render=False)
-#    print(sum(sum(results,[]))/len(results))
+    results = agent.evaluate(10000, render=False, verbose=False)
+    print(f'{sum(sum(results,[]))/len(results)*100}% Accuracy')
 
-train_model(agent_opts, model_opts)
-# evaluate_model(agent_opts, model_opts, best_model=True)
+#train_model(agent_opts, model_opts)
+evaluate_model(agent_opts, model_opts, best_model=True)
