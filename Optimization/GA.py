@@ -3,6 +3,7 @@
 '''Solve the wandering salesman problem using GA by minimizing distance (maximizing 1/distance)'''
 import numpy as np, random, operator, pandas as pd, matplotlib.pyplot as plt
 
+#--- Define Gene --------------------------------------------------------------+
 class City:
     def __init__(self, x, y):
         self.x = x
@@ -16,7 +17,9 @@ class City:
     
     def __repr__(self):
         return "(" + str(self.x) + "," + str(self.y) + ")"
+#------------------------------------------------------------------------------+
 
+#--- Define Quality of Individual ---------------------------------------------+
 class Fitness:
     def __init__(self, route):
         self.route = route
@@ -38,9 +41,11 @@ class Fitness:
         return self.distance
     
     def routeFitness(self):
+        '''COST FUNCTION TO BE MAXIMIZED'''
         if self.fitness == 0:
             self.fitness = 1 / float(self.routeDistance())
         return self.fitness
+#------------------------------------------------------------------------------+
 
 #--- Initialize Population ----------------------------------------------------+
 
@@ -58,6 +63,7 @@ def initialPopulation(popSize, cityList):
 
 #------------------------------------------------------------------------------+
 
+#--- Determine Breeding Pool --------------------------------------------------+
 
 def rankRoutes(population):
     '''
@@ -95,6 +101,9 @@ def matingPool(population, selectionResults):
         index = selectionResults[i]
         matingpool.append(population[index])
     return matingpool
+#------------------------------------------------------------------------------+
+
+#--- Breed Population ---------------------------------------------------------+
 
 def breed(parent1, parent2):
     '''
@@ -133,6 +142,9 @@ def breedPopulation(matingpool, eliteSize):
         child = breed(pool[i], pool[len(matingpool)-i-1])
         children.append(child)
     return children
+#------------------------------------------------------------------------------+
+
+#--- Mutate New Generation ----------------------------------------------------+
 
 def mutate(individual, mutationRate):
     '''
@@ -156,8 +168,13 @@ def mutatePopulation(population, mutationRate):
         mutatedInd = mutate(population[ind], mutationRate)
         mutatedPop.append(mutatedInd)
     return mutatedPop
+#------------------------------------------------------------------------------+
 
+#--- Define Algorithm ---------------------------------------------------------+
 def nextGeneration(currentGen, eliteSize, mutationRate):
+    '''
+        Perform all actions corresponding to a new generation
+    '''
     popRanked = rankRoutes(currentGen)
     selectionResults = selection(popRanked, eliteSize)
     matingpool = matingPool(currentGen, selectionResults)
@@ -194,8 +211,10 @@ def geneticAlgorithmPlot(population, popSize, eliteSize, mutationRate, generatio
     plt.ylabel('Distance')
     plt.xlabel('Generation')
     plt.show()
+#------------------------------------------------------------------------------+
 
-#Create cities
+#--- Run ----------------------------------------------------------------------+
+#Create cities 'genes'
 cityList = []
 
 for i in range(0,25):
@@ -203,3 +222,4 @@ for i in range(0,25):
 
 #run algorithm    
 geneticAlgorithmPlot(population=cityList, popSize=100, eliteSize=30, mutationRate=0.01, generations=500)
+#------------------------------------------------------------------------------+
