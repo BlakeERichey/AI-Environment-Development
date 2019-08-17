@@ -21,21 +21,50 @@ from   tensorflow.python.client    import device_lib
 from   tensorflow.keras.callbacks  import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers     import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
+from BRprofiler import profile
 
 
 class NNEvo:
 
-  def __init__(self, population=100, mxrt=.01, crrt=.2, layers=3, nodes_per_layer=[10,10,11], generations=2, env=None, activation='linear', tour=3, elitist=3):
+  def __init__(self, 
+    tour=3, 
+    mxrt=.01, 
+    layers=1, 
+    env=None, 
+    elitist=3,
+    population=10, 
+    generations=10, 
+    activation='linear', 
+    nodes_per_layer=[4], 
+    fitness_goal=200):
+
+    '''
+      config = {
+        'tour': 3, 
+        'mxrt': .01, 
+        'layers': 1, 
+        'env': None, 
+        'elitist': 3,
+        'population': 10, 
+        'generations': 10, 
+        'activation': 'linear', 
+        'nodes_per_layer': [4], 
+        'fitness_goal': 200
+      }
+    '''
+
     self.default_nodes   = 20
     self.env             = env
-    self.crrt            = crrt
     self.mxrt            = mxrt
+    self.best_fit        = None
     self.tour            = tour
+    self.goal_met        = False
     self.num_layers      = layers
     self.elitist         = elitist
     self.activation      = activation 
     self.pop_size        = population
     self.generations     = generations
+    self.fitness_goal    = fitness_goal
     self.nodes_per_layer = nodes_per_layer
     self.num_outputs     = self.env.action_space.n
     self.num_features    = self.env.observation_space.shape[0]
@@ -104,7 +133,8 @@ class NNEvo:
     rewards = []
     envstate = self.env.reset()
     while not done:
-      action = model.predict(envstate.reshape(1, -1))
+      qvals = model.predict(envstate.reshape(1, -1))[0]
+      action = np.argmax(qvals)
       envstate, reward, done, info = self.env.step(action)
       rewards.append(reward)
     
@@ -120,15 +150,22 @@ class NNEvo:
     for i, model in enumerate(self.models):
       fitness = self.quality(model)
       ranked.append((i, fitness))
-    
-    ranked = sorted(ranked, key=operator.itemgetter(1), reverse=True)
+      if self.fitness_goal is not None and fitness >= self.fitness_goal:
+        self.goal_met = self.models[i] #save model that met goal
+        self.best_fit = (i, fitness)
+        break
 
-    for i in range(self.elitist):
-      selection.append(ranked.pop(0))
+    if not self.goal_met:  #if goal met prepare to terminate
+      ranked = sorted(ranked, key=operator.itemgetter(1), reverse=True)
+      print('Ranked:', ranked)
+      self.best_fit = ranked[0]
 
-    while len(selection) < self.pop_size:
-      tourny = random.sample(ranked, self.tour)
-      selection.append(max(tourny, key=lambda x:x[1]))
+      for i in range(self.elitist):
+        selection.append(ranked.pop(0))
+
+      while len(selection) < self.pop_size:
+        tourny = random.sample(ranked, self.tour)
+        selection.append(max(tourny, key=lambda x:x[1]))
     
     return selection
 
@@ -161,8 +198,63 @@ class NNEvo:
   def mutate(self, population):
     for individual in population:
       for i, gene in enumerate(individual):
-        if random.random() > self.mxrt:
+        if random.random() < self.mxrt:
           individual[i] = random.uniform(-1, 1)
+    
+    return population
+
+  def train(self):
+    self.create_population()
+    print('Population created', len(self.pop))
+    for i in range(self.generations):
+      print('Generation:', i)
+      parents = self.selection()
+      if not self.goal_met:
+        print('Goal not met. Parents selected.')
+        print('Best fit:', self.best_fit)
+        children = self.crossover(parents)
+        print('Breeding done.')
+        new_pop = self.mutate(children)
+        print('Mutations done.')
+        
+        print('New pop:', len(new_pop))
+        for i, individual in enumerate(new_pop):
+          self.models[i].set_weights(self.deserialize(individual))
+      else:
+        print('Goal met!')
+        self.goal_met.save_weights('best_model.h5')
+        print('Best results saved to best_model.h5')
+        break
+    
+    if not self.goal_met:
+      if self.best_fit:
+        self.models[self.best_fit[0]].save_weights('best_model.h5')
+        print('Best results saved to best_model.h5')
+
+
+  def evaluate(self, filename=None):
+    if self.goal_met or filename:
+      #load model
+      if filename:
+        model = self.create_nn()
+        model.load_weights(filename)
+      else:
+        model = self.goal_met
+
+      #display results
+      while True:
+        done = False
+        rewards = []
+        envstate = self.env.reset()
+        while not done:
+          qvals = model.predict(envstate.reshape(1, -1))[0]
+          action = np.argmax(qvals)
+          envstate, reward, done, info = self.env.step(action)
+          self.env.render()
+          rewards.append(reward)
+
+        print('Reward:', sum(rewards))
+        rewards = []
 
 
   def serialize(self, model):
@@ -207,33 +299,32 @@ def splice_list(list1, list2, index1, index2):
   
   return splice
 
-# create individual(NN)/population(multiple NNs) -
-# #mating pool/parent selection                  - 
-# crossover/breed                                - 
-# mutation                                       - 
-# forward propgation-
-# training
-# activation-
-#tour size and elit size from init               -
-#solved, num episodes vars, best modal etc
+@profile
+def train():
+    env = gym.make('CartPole-v0')
+    print('Environment created')
+    
+    config = {
+      'tour': 3, 
+      'mxrt': .008, 
+      'layers': 1, 
+      'env': env, 
+      'elitist': 3,
+      'population': 20, 
+      'generations': 10, 
+      'activation': 'linear', 
+      'nodes_per_layer': [4], 
+      'fitness_goal': 200
+    }
+    
+    agents = NNEvo(**config)
+    agents.train()
 
-# matingpool/parent selection/elistist/reoulette wheel/tournament
-# crossover
-# mutation
-# create_individual
-# create population
-# determine best action/apply weights
-# training
-
-
-# env = gym.make('CartPole-v0')
-# agents = NNEvo(env=env)
-# model = agents.create_nn()
-# weights = agents.flatten_weights(model)
-# #print(weights)
-# #print(len(weights))
-# #print(agents.weights_lengths)
-
-# weights = agents.weights_from_genes(weights)
-# agents.model.set_weights(weights)
-# print('success')
+def evaluate():
+    env = gym.make('CartPole-v0')
+    print('Environment created')
+    agents = NNEvo(env=env)
+    agents.evaluate('best_model.h5')
+    
+#train()
+#evaluate()

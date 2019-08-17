@@ -1,3 +1,23 @@
 Add Eligibility Trace to better enable an AI to have long-term goals  
 Add target/training network implementation
 Add rnn for cnns
+
+
+#Future Plans for NNEvo:
+# create individual(NN)/population(multiple NNs) -
+# #mating pool/parent selection                  - 
+# crossover/breed                                - 
+# mutation                                       - 
+# forward propgation-
+# training
+# activation-
+#tour size and elit size from init               -
+#solved, num episodes vars, best modal etc
+
+# matingpool/parent selection/elistist/reoulette wheel/tournament
+# crossover
+# mutation
+# create_individual
+# create population
+# determine best action/apply weights
+# training
