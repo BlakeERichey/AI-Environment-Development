@@ -143,12 +143,10 @@ def load_json(filename):
   
     return obj
 
-env = gym.make('MountainCar-v0')
-agent = Qagent(env)
-#print('Loading QVals')
-#agent.load('mountaincar.pickle')
-agent.evaluate()
-agent.train(5000)
-print(agent.q_table)
-#agent.save('mountaincar.pickle')
-env.close()
+# Example use
+# env = gym.make('MountainCar-v0')
+# agent = Qagent(env)
+# agent.train(5000)
+# agent.save('mountaincar.pickle')
+# agent.evaluate()
+# env.close()

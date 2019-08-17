@@ -21,7 +21,6 @@ from   tensorflow.python.client    import device_lib
 from   tensorflow.keras.callbacks  import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers     import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
-from BRprofiler import profile
 
 
 class NNEvo:
