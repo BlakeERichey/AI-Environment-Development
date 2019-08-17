@@ -285,12 +285,12 @@ class NNEvo:
 
 
   def evaluate(self, filename=None):
-    print(self.goal_met)
     if self.goal_met or filename:
       #load model
       if filename:
         model = self.create_nn()
         model.load_weights(filename)
+        print(f'Weights loaded from {filename}')
       else:
         model = self.goal_met
 

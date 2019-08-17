@@ -1,24 +1,25 @@
 
 import gym
 from NNEvo import NNEvo
+from time import time
 
-env = gym.make('CartPole-v0')
+env = gym.make('CartPole-v1')
 print('Environment created')
 config = {
-  'tour': 4, 
+  'tour': 8, 
   'cxrt': .1,
   'mxrt': 1,
   'layers': 1, 
   'env': env, 
-  'elitist': 2,
+  'elitist': 3,
   'cxtype': 'splice',
-  'population': 5, 
-  'generations': 100, 
+  'population': 15, 
+  'generations': 200, 
   'selection': 'tour',
-  'fitness_goal': 200,
+  'fitness_goal': 500,
   'validation_size': 8,
   'activation': 'softmax', 
-  'nodes_per_layer': [10], 
+  'nodes_per_layer': [24], 
 }
 
 #@profile
@@ -30,6 +31,9 @@ def train():
 def evaluate():
     agents = NNEvo(**config)
     agents.evaluate('best_model.h5')
-    
+
+start = time()
 train()
+end = time()
+print('Time training:', end-start)
 evaluate()
