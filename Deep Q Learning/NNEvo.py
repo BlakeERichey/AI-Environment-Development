@@ -32,6 +32,7 @@ class NNEvo:
     layers=1, 
     env=None, 
     elitist=3,
+    cxtype='avg',
     population=10, 
     generations=10, 
     activation='linear', 
@@ -45,6 +46,7 @@ class NNEvo:
         'layers': 1, 
         'env': None, 
         'elitist': 3,
+        'cxtype': 'avg',
         'population': 10, 
         'generations': 10, 
         'activation': 'linear', 
@@ -58,6 +60,7 @@ class NNEvo:
     self.mxrt            = mxrt
     self.best_fit        = None
     self.tour            = tour
+    self.cxtype          = cxtype
     self.goal_met        = False
     self.num_layers      = layers
     self.elitist         = elitist
@@ -186,12 +189,15 @@ class NNEvo:
 
       parent1_genes = self.serialize(self.models[parent1[0]])
       parent2_genes = self.serialize(self.models[parent2[0]])
+      if self.cxtype == 'splice':
+        #splice genes
+        geneA = int(random.random() * len(parent1_genes))
+        geneB = int(random.random() * len(parent1_genes))
 
-      #splice genes
-      geneA = int(random.random() * len(parent1_genes))
-      geneB = int(random.random() * len(parent1_genes))
-
-      child = splice_list(parent1_genes, parent2_genes, geneA, geneB)
+        child = splice_list(parent1_genes, parent2_genes, geneA, geneB)
+      else:
+        child = ((np.array(parent1_genes) + np.array(parent2_genes)) / 2).tolist()
+      
       children.append(child)
     
     return children
@@ -304,31 +310,29 @@ def splice_list(list1, list2, index1, index2):
   
   return splice
 
-@profile
-def train():
-    env = gym.make('MountainCar-v0')
-    print('Environment created')
-    
-    config = {
-      'tour': 4, 
+env = gym.make('Acrobot-v1')
+print('Environment created')
+config = {
+      'tour': 3, 
       'mxrt': .01, 
       'layers': 3, 
       'env': env, 
-      'elitist': 8,
-      'population': 50, 
-      'generations': 100, 
+      'elitist': 3,
+      'cxtype': 'avg',
+      'population': 20, 
+      'generations': 5, 
       'activation': 'linear', 
-      'nodes_per_layer': [64,64,64], 
-      'fitness_goal': -100
+      'nodes_per_layer': [10,10], 
+      'fitness_goal': None
     }
-    
+
+@profile
+def train():
     agents = NNEvo(**config)
     agents.train()
 
 def evaluate():
-    env = gym.make('CartPole-v0')
-    print('Environment created')
-    agents = NNEvo(env=env)
+    agents = NNEvo(**config)
     agents.evaluate('best_model.h5')
     
 train()
