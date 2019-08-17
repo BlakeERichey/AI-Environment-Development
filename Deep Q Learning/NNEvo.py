@@ -35,9 +35,10 @@ class NNEvo:
     cxtype='avg',
     population=10, 
     generations=10, 
+    fitness_goal=200,
+    validation_size=0,
     activation='linear', 
-    nodes_per_layer=[4], 
-    fitness_goal=200):
+    nodes_per_layer=[4]):
 
     '''
       config = {
@@ -49,9 +50,10 @@ class NNEvo:
         'cxtype': 'avg',
         'population': 10, 
         'generations': 10, 
+        'fitness_goal': 200,
+        'validation_size': 0,
         'activation': 'linear', 
         'nodes_per_layer': [4], 
-        'fitness_goal': 200
       }
     '''
 
@@ -68,6 +70,7 @@ class NNEvo:
     self.pop_size        = population
     self.generations     = generations
     self.fitness_goal    = fitness_goal
+    self.validation_size = validation_size
     self.nodes_per_layer = nodes_per_layer
     self.num_outputs     = self.env.action_space.n
     self.num_features    = self.env.observation_space.shape[0]
@@ -76,6 +79,8 @@ class NNEvo:
     self.pop    = [] #population (2d-list of weights)
     self.weight_shapes   = None
     self.weights_lengths = None
+    self.plots = [] #points for matplotlib
+    self.episodes = 0
 
   #--- Initialize Population --------------------------------------------------+
   def create_nn(self):
@@ -116,7 +121,7 @@ class NNEvo:
           self.weights_lengths.append(length)
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
-    
+      print(self.weights_lengths)
     return model
   
   def create_population(self):
@@ -126,6 +131,8 @@ class NNEvo:
       self.pop.append(self.serialize(model))
   #----------------------------------------------------------------------------+
 
+  #--- Fitness Calculation ----------------------------------------------------+
+
   def quality(self, model):
     '''
       fitness function. Returns quality of model
@@ -133,6 +140,7 @@ class NNEvo:
       Runs 1 episode of environment
     '''
 
+    self.episodes += 1
     done = False
     rewards = []
     envstate = self.env.reset()
@@ -144,6 +152,9 @@ class NNEvo:
     
     return sum(rewards)
   
+  #----------------------------------------------------------------------------+
+  
+  #--- Breed Population -------------------------------------------------------+
   def selection(self):
     '''
       generate mating pool, tournament && elistist selection policy
@@ -155,9 +166,15 @@ class NNEvo:
       fitness = self.quality(model)
       ranked.append((i, fitness))
       if self.fitness_goal is not None and fitness >= self.fitness_goal:
-        self.goal_met = self.models[i] #save model that met goal
-        self.best_fit = (i, fitness)
-        break
+        if self.validation_size:
+          valid = self.validate(self.models[i])
+        else:
+          valid = True
+        
+        if valid:
+          self.goal_met = self.models[i] #save model that met goal
+          self.best_fit = (i, fitness)
+          break
 
     if not self.goal_met:  #if goal met prepare to terminate
       ranked = sorted(ranked, key=operator.itemgetter(1), reverse=True)
@@ -165,12 +182,13 @@ class NNEvo:
       self.best_fit = ranked[0]
 
       for i in range(self.elitist):
-        selection.append(ranked.pop(0))
+        selection.append(ranked[i])
 
       while len(selection) < self.pop_size:
         tourny = random.sample(ranked, self.tour)
         selection.append(max(tourny, key=lambda x:x[1]))
     
+    self.plots.append(self.best_fit)
     return selection
 
   def crossover(self, parents):
@@ -180,6 +198,8 @@ class NNEvo:
     for i in range(self.elitist):
       index = parents[i][0]
       children.append(self.serialize(self.models[index]))
+
+    parents = random.sample(parents, len(parents)) #randomize breeding pool
 
     #breed rest
     i = 0
@@ -205,20 +225,23 @@ class NNEvo:
   def mutate(self, population):
     for ind, individual in enumerate(population):
       for i, gene in enumerate(individual):
-        if ind == len(population) - 1: #Randomly initialize last child
-          mxrt = 1
-        else:
-          mxrt = self.mxrt
+        mxrt = self.mxrt
+        if self.pop_size > 10:
+          if ind == len(population) - 1: #Randomly initialize last child
+            mxrt = 1
         if random.random() < self.mxrt:
           individual[i] = random.uniform(-1, 1)
     
     return population
+  #----------------------------------------------------------------------------+
+  
+  #--- Train/Evaluate ---------------------------------------------------------+
 
   def train(self):
     self.create_population()
     print('Population created', len(self.pop))
     for i in range(self.generations):
-      print('Generation:', i)
+      print('\nGeneration:', i)
       parents = self.selection()
       if not self.goal_met:
         print('Goal not met. Parents selected.')
@@ -232,7 +255,7 @@ class NNEvo:
         for i, individual in enumerate(new_pop):
           self.models[i].set_weights(self.deserialize(individual))
       else:
-        print('Goal met!')
+        print(f'Goal met! Episodes: {self.episodes}')
         self.goal_met.save_weights('best_model.h5')
         print('Best results saved to best_model.h5')
         break
@@ -244,6 +267,7 @@ class NNEvo:
 
 
   def evaluate(self, filename=None):
+    print(self.goal_met)
     if self.goal_met or filename:
       #load model
       if filename:
@@ -266,7 +290,43 @@ class NNEvo:
 
         print('Reward:', sum(rewards))
         rewards = []
+  #----------------------------------------------------------------------------+
 
+  #--- Validate Fitness -------------------------------------------------------+
+  def validate(self, model):
+    print('Validating Model...', end='')
+    
+    total_rewards = []
+    n_epochs = self.validation_size
+    #test results
+    for epoch in range(n_epochs):
+      done = False
+      rewards = []
+      envstate = self.env.reset()
+      while not done:
+        qvals = model.predict(envstate.reshape(1, -1))[0]
+        action = np.argmax(qvals)
+        envstate, reward, done, info = self.env.step(action)
+        rewards.append(reward)
+
+      total_rewards.append(sum(rewards))
+    print(sum(total_rewards)/len(total_rewards))
+    return sum(total_rewards)/len(total_rewards) >= self.fitness_goal
+  #----------------------------------------------------------------------------+
+
+  #--- Graph Functions --------------------------------------------------------+
+
+  def show_plot(self):
+    y = [self.plots[i][1] for i in range(len(self.plots))] #best fitness
+    x = [i for i in range(len(self.plots))] #generation
+
+    plt.plot(x, y, label='Best fitness')
+    plt.legend(loc=4)
+    plt.show()
+    
+  #----------------------------------------------------------------------------+
+
+  #--- Helper Functions -------------------------------------------------------+
 
   def serialize(self, model):
     '''
@@ -309,31 +369,34 @@ def splice_list(list1, list2, index1, index2):
     splice += list2[index2:len(list1)]
   
   return splice
+#------------------------------------------------------------------------------+
 
-env = gym.make('Acrobot-v1')
+env = gym.make('CartPole-v0')
 print('Environment created')
 config = {
-      'tour': 3, 
-      'mxrt': .01, 
-      'layers': 3, 
-      'env': env, 
-      'elitist': 3,
-      'cxtype': 'avg',
-      'population': 20, 
-      'generations': 5, 
-      'activation': 'linear', 
-      'nodes_per_layer': [10,10], 
-      'fitness_goal': None
-    }
+  'tour': 4, 
+  'mxrt': 1/180, 
+  'layers': 1, 
+  'env': env, 
+  'elitist': 2,
+  'cxtype': 'splice',
+  'population': 5, 
+  'generations': 100, 
+  'fitness_goal': 195,
+  'validation_size': 25,
+  'activation': 'linear', 
+  'nodes_per_layer': [10], 
+}
 
 @profile
 def train():
     agents = NNEvo(**config)
     agents.train()
+    agents.show_plot()
 
 def evaluate():
     agents = NNEvo(**config)
     agents.evaluate('best_model.h5')
     
 train()
-#evaluate()
+evaluate()
