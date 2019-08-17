@@ -99,6 +99,7 @@ class NNEvo:
 
     #create deserialize dependencies
     if self.weight_shapes is None:
+      model.summary()
       self.weight_shapes = []
       self.weights_lengths = []
 
@@ -196,8 +197,12 @@ class NNEvo:
     return children
   
   def mutate(self, population):
-    for individual in population:
+    for ind, individual in enumerate(population):
       for i, gene in enumerate(individual):
+        if ind == len(population) - 1: #Randomly initialize last child
+          mxrt = 1
+        else:
+          mxrt = self.mxrt
         if random.random() < self.mxrt:
           individual[i] = random.uniform(-1, 1)
     
@@ -301,20 +306,20 @@ def splice_list(list1, list2, index1, index2):
 
 @profile
 def train():
-    env = gym.make('CartPole-v0')
+    env = gym.make('MountainCar-v0')
     print('Environment created')
     
     config = {
-      'tour': 3, 
-      'mxrt': .008, 
-      'layers': 1, 
+      'tour': 4, 
+      'mxrt': .01, 
+      'layers': 3, 
       'env': env, 
-      'elitist': 3,
-      'population': 20, 
-      'generations': 10, 
+      'elitist': 8,
+      'population': 50, 
+      'generations': 100, 
       'activation': 'linear', 
-      'nodes_per_layer': [4], 
-      'fitness_goal': 200
+      'nodes_per_layer': [64,64,64], 
+      'fitness_goal': -100
     }
     
     agents = NNEvo(**config)
@@ -326,5 +331,5 @@ def evaluate():
     agents = NNEvo(env=env)
     agents.evaluate('best_model.h5')
     
-#train()
+train()
 #evaluate()
