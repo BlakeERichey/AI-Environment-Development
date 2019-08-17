@@ -90,7 +90,7 @@ def QLearning(env, learning, discount, epsilon, min_eps, episodes):
             reward_list = []
             
         if (i+1) % 100 == 0:    
-            print('Episode {} Average Reward: {}'.format(i+1, ave_reward))
+            print('Episode {} Average Reward: {} Epsilon {}'.format(i+1, ave_reward, epsilon))
             
     env.close()
     
@@ -104,5 +104,5 @@ plt.plot(100*(np.arange(len(rewards)) + 1), rewards)
 plt.xlabel('Episodes')
 plt.ylabel('Average Reward')
 plt.title('Average Reward vs Episodes')
-plt.savefig('rewards.png')     
+#plt.savefig('rewards.png')     
 plt.close() 
