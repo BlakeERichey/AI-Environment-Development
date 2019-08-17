@@ -22,6 +22,5 @@ Add rnn for cnns
 # determine best action/apply weights
 # training
 
-#reoulette wheel
 gloabl best fit
 matrices instead of keras #negative of no cnns

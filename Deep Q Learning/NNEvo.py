@@ -28,6 +28,7 @@ class NNEvo:
 
   def __init__(self, 
     tour=3, 
+    cxrt=.2,
     mxrt=.01, 
     layers=1, 
     env=None, 
@@ -35,6 +36,7 @@ class NNEvo:
     cxtype='avg',
     population=10, 
     generations=10, 
+    selection='tour',
     fitness_goal=200,
     validation_size=0,
     activation='linear', 
@@ -43,13 +45,15 @@ class NNEvo:
     '''
       config = {
         'tour': 3, 
-        'mxrt': .01, 
+        'cxrt': .2,
+        'mxrt': .01,
         'layers': 1, 
         'env': None, 
         'elitist': 3,
         'cxtype': 'avg',
         'population': 10, 
         'generations': 10, 
+        'selection': 'tour',
         'fitness_goal': 200,
         'validation_size': 0,
         'activation': 'linear', 
@@ -60,12 +64,14 @@ class NNEvo:
     self.default_nodes   = 20
     self.env             = env
     self.mxrt            = mxrt
+    self.cxrt            = cxrt   #chance of parent being selected (crossover rate)
     self.best_fit        = None
     self.tour            = tour
     self.cxtype          = cxtype
     self.goal_met        = False
     self.num_layers      = layers
     self.elitist         = elitist
+    self.selection_type  = selection  #selection type (cxrt/tour)
     self.activation      = activation 
     self.pop_size        = population
     self.generations     = generations
@@ -121,7 +127,10 @@ class NNEvo:
           self.weights_lengths.append(length)
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
-      print(self.weights_lengths)
+      if self.mxrt is 1:
+        self.mxrt = 1/( self.weights_lengths[-1] * 2 )
+      print('Weight lengths:', self.weights_lengths)
+      print('Mutation Rate:', self.mxrt)
     return model
   
   def create_population(self):
@@ -184,10 +193,18 @@ class NNEvo:
       for i in range(self.elitist):
         selection.append(ranked[i])
 
-      while len(selection) < self.pop_size:
-        tourny = random.sample(ranked, self.tour)
-        selection.append(max(tourny, key=lambda x:x[1]))
-    
+      if self.selection_type == 'tour':
+        while len(selection) < self.pop_size:
+          tourny = random.sample(ranked, self.tour)
+          selection.append(max(tourny, key=lambda x:x[1]))
+
+      elif self.selection_type == 'cxrt':
+        while len(selection) < self.pop_size:
+          for model in ranked:
+            if random.random() < self.cxrt:
+              selection.append(model)
+            
+
     self.plots.append(self.best_fit)
     return selection
 
@@ -375,20 +392,22 @@ env = gym.make('CartPole-v0')
 print('Environment created')
 config = {
   'tour': 4, 
-  'mxrt': 1/180, 
+  'cxrt': .2,
+  'mxrt': 1,
   'layers': 1, 
   'env': env, 
   'elitist': 2,
   'cxtype': 'splice',
-  'population': 5, 
+  'population': 10, 
   'generations': 100, 
-  'fitness_goal': 195,
-  'validation_size': 25,
-  'activation': 'linear', 
+  'selection': 'cxrt',
+  'fitness_goal': 200,
+  'validation_size': 5,
+  'activation': 'softmax', 
   'nodes_per_layer': [10], 
 }
 
-@profile
+#@profile
 def train():
     agents = NNEvo(**config)
     agents.train()
