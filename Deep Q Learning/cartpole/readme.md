@@ -18,6 +18,8 @@ Solution reached in 20 epochs/episodes
 
 ![Reward Plot](/Deep%20Q%20Learning/cartpole/results/rewards.png "Cumulative Reward per Epoch")  
 *Cumulative rewards at each epoch during training*
+![Reward Plot](/Deep%20Q%20Learning/cartpole/results/loss.png "Cumulative Reward per Epoch")  
+*Loss at each epoch during training*
 
 Output of program:  
 ```
