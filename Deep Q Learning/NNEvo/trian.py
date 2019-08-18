@@ -18,7 +18,7 @@ config = {
   'selection': 'tour',
   'fitness_goal': -110,
   'validation_size': 8,
-  'activation': 'linear', 
+  'activation': 'softmax', 
   'nodes_per_layer': [256,256,256], 
 }
 

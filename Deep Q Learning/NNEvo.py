@@ -36,6 +36,7 @@ class NNEvo:
     population=10, 
     generations=10, 
     selection='tour',
+    model_type='ann',
     fitness_goal=200,
     validation_size=0,
     activation='linear', 
@@ -51,8 +52,9 @@ class NNEvo:
         'elitist': 3,
         'cxtype': 'avg',
         'population': 10, 
-        'generations': 10, 
+        'generations': 10,
         'selection': 'tour',
+        'model_type': 'ann', 
         'fitness_goal': 200,
         'validation_size': 0,
         'activation': 'linear', 
@@ -72,6 +74,7 @@ class NNEvo:
     self.elitist         = elitist
     self.selection_type  = selection  #selection type (cxrt/tour)
     self.activation      = activation 
+    self.model_type      = model_type
     self.pop_size        = population
     self.generations     = generations
     self.fitness_goal    = fitness_goal
@@ -87,28 +90,69 @@ class NNEvo:
     self.plots = [] #points for matplotlib
     self.episodes = 0
 
+    
+    if self.model_type == 'cnn':
+      self.envshape       = self.env.observation_space.shape
+      self.batch_envshape = merge_tuple((1, self.envshape))
+      self.pool_size       = 2
+      self.filter_size     = 3
+      self.stride_size     = None 
+
   #--- Initialize Population --------------------------------------------------+
   def create_nn(self):
     '''Create individual of population'''
 
-    model = Sequential()
-    model.add(Dense(self.num_features, input_shape = (self.num_features,)))
+    if self.model_type == 'ann':
+
+      model = Sequential()
+      model.add(Dense(self.num_features, input_shape = (self.num_features,)))
+      
+      for layer in range(self.num_layers):
+
+          try:
+              nodes=self.nodes_per_layer[layer]
+          except IndexError:
+              nodes = None
+
+          if nodes is None:
+              nodes = self.default_nodes
+
+          model.add(Dense(units = nodes, activation = 'relu'))
+      
+      #output layer
+      model.add(Dense(units = self.num_outputs, activation = self.activation, name='dense_output'))
+      model.compile(optimizer = Adam(lr=0.001), loss = 'mse', metrics=['accuracy'])
     
-    for layer in range(self.num_layers):
+    elif self.model_type == 'cnn':
+      model = Sequential()
+
+      for layer in range(self.num_layers):
 
         try:
-            nodes=self.nodes_per_layer[layer]
+          nodes=self.nodes_per_layer[layer]
         except IndexError:
-            nodes = None
+          nodes = None
 
         if nodes is None:
-            nodes = self.default_nodes
+          nodes = self.default_nodes
 
-        model.add(Dense(units = nodes, activation = 'relu'))
-    
-    #output layer
-    model.add(Dense(units = self.num_outputs, activation = self.activation, name='dense_output'))
-    model.compile(optimizer = Adam(lr=0.001), loss = 'mse', metrics=['accuracy'])
+        if layer == 0:
+          #input layer
+          model.add(Conv2D(nodes, kernel_size=self.filter_size, activation='relu', \
+            input_shape=(self.envshape)))
+        else:
+          #add hidden layers
+          model.add(Conv2D(nodes, kernel_size=self.filter_size, activation='relu'))
+
+      model.add(MaxPooling2D(pool_size=self.pool_size, strides=self.stride_size))
+      model.add(Flatten())
+      #output layer
+      model.add(Dense(self.num_outputs, activation='softmax'))
+
+      #compile model using accuracy to measure model performance
+      model.compile(optimizer=Adam(lr=0.001), \
+        loss='categorical_crossentropy', metrics=['accuracy'])
+
 
     #create deserialize dependencies
     if self.weight_shapes is None:
@@ -154,7 +198,7 @@ class NNEvo:
     rewards = []
     envstate = self.env.reset()
     while not done:
-      qvals = model.predict(envstate.reshape(1, -1))[0]
+      qvals = model.predict(self.adj_envstate(envstate))[0]
       action = np.argmax(qvals)
       envstate, reward, done, info = self.env.step(action)
       rewards.append(reward)
@@ -301,7 +345,7 @@ class NNEvo:
         rewards = []
         envstate = self.env.reset()
         while not done:
-          qvals = model.predict(envstate.reshape(1, -1))[0]
+          qvals = model.predict(self.adj_envstate(envstate))[0]
           action = np.argmax(qvals)
           envstate, reward, done, info = self.env.step(action)
           self.env.render()
@@ -323,7 +367,7 @@ class NNEvo:
       rewards = []
       envstate = self.env.reset()
       while not done:
-        qvals = model.predict(envstate.reshape(1, -1))[0]
+        qvals = model.predict(self.adj_envstate(envstate))[0]
         action = np.argmax(qvals)
         envstate, reward, done, info = self.env.step(action)
         rewards.append(reward)
@@ -346,6 +390,18 @@ class NNEvo:
   #----------------------------------------------------------------------------+
 
   #--- Helper Functions -------------------------------------------------------+
+
+  def adj_envstate(self, envstate):
+    '''
+      changes envstate to a predict acceptable format
+    '''
+
+    if self.model_type == 'cnn':
+      adj_envstate = envstate.reshape(self.batch_envshape)
+    else:
+      adj_envstate = envstate.reshape(1, -1)
+    
+    return adj_envstate
 
   def serialize(self, model):
     '''
@@ -388,4 +444,49 @@ def splice_list(list1, list2, index1, index2):
     splice += list2[index2:len(list1)]
   
   return splice
+
+def merge_tuple(arr): #arr: (('aa', 'bb'), 'cc') -> ('aa', 'bb', 'cc')
+  return tuple(j for i in arr for j in (i if isinstance(i, tuple) else (i,)))
 #------------------------------------------------------------------------------+
+
+
+
+import gym
+import image_env
+from time import time
+
+env = gym.make('image_env-v1')
+print('Environment created')
+config = {
+  'tour': 4, 
+  'cxrt': .1,
+  'mxrt': 1,
+  'layers': 3, 
+  'env': env, 
+  'elitist': 3,
+  'cxtype': 'splice',
+  'population': 20, 
+  'generations': 150, 
+  'selection': 'tour',
+  'model_type': 'cnn',
+  'fitness_goal': 240,
+  'validation_size': 2,
+  'activation': 'softmax', 
+  'nodes_per_layer': [64,32,32], 
+}
+
+#@profile
+def train():
+    agents = NNEvo(**config)
+    agents.train()
+    agents.show_plot()
+
+def evaluate():
+    agents = NNEvo(**config)
+    agents.evaluate('best_model.h5')
+
+start = time()
+train()
+end = time()
+print('Time training:', end-start)
+#evaluate()
