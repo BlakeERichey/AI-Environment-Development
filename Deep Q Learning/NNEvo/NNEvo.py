@@ -215,7 +215,7 @@ class NNEvo:
     #keep elites
     for i in range(self.elitist):
       index = parents[i][0]
-      children.append(self.serialize(self.models[index]))
+      children.append(self.pop[index])
 
     parents = random.sample(parents, len(parents)) #randomize breeding pool
 
@@ -225,8 +225,8 @@ class NNEvo:
       parent1 = parents[i]
       parent2 = parents[len(parents)-i-1]
 
-      parent1_genes = self.serialize(self.models[parent1[0]])
-      parent2_genes = self.serialize(self.models[parent2[0]])
+      parent1_genes = self.pop[parent1[0]]
+      parent2_genes = self.pop[parent2[0]]
       if self.cxtype == 'splice':
         #splice genes
         geneA = int(random.random() * len(parent1_genes))
@@ -237,6 +237,7 @@ class NNEvo:
         child = ((np.array(parent1_genes) + np.array(parent2_genes)) / 2).tolist()
       
       children.append(child)
+      i+=1
     
     return children
   
@@ -270,6 +271,7 @@ class NNEvo:
         print('Mutations done.')
         
         print('New pop:', len(new_pop))
+        self.pop = new_pop
         for i, individual in enumerate(new_pop):
           self.models[i].set_weights(self.deserialize(individual))
       else:
