@@ -1,8 +1,6 @@
 '''
 Created on Friday August 16, 2019
-
 @author: Blake Richey
-
 Implementation of NeuroEvolution Algorithm:
   Develop a neurel network and implement genetic algorithm that finds optimum
   weights, as an alternative to backpropogation
@@ -146,7 +144,6 @@ class NNEvo:
   def quality(self, model):
     '''
       fitness function. Returns quality of model
-
       Runs 1 episode of environment
     '''
 
@@ -248,7 +245,7 @@ class NNEvo:
         if self.pop_size > 10:
           if ind == len(population) - 1: #Randomly initialize last child
             mxrt = 1
-        if random.random() < self.mxrt:
+        if random.random() < mxrt:
           individual[i] = random.uniform(-1, 1)
     
     return population

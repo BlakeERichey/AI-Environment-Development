@@ -146,7 +146,6 @@ class NNEvo:
   def quality(self, model):
     '''
       fitness function. Returns quality of model
-
       Runs 1 episode of environment
     '''
 
@@ -248,7 +247,7 @@ class NNEvo:
         if self.pop_size > 10:
           if ind == len(population) - 1: #Randomly initialize last child
             mxrt = 1
-        if random.random() < self.mxrt:
+        if random.random() < mxrt:
           individual[i] = random.uniform(-1, 1)
     
     return population
