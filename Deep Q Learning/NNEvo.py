@@ -321,7 +321,7 @@ class NNEvo:
         print('Best results saved to best_model.h5')
 
 
-  def evaluate(self, filename=None):
+  def evaluate(self, filename=None, epochs=0):
     if self.goal_met or filename:
       #load model
       if filename:
@@ -331,8 +331,10 @@ class NNEvo:
       else:
         model = self.goal_met
 
+      epoch = 0
+      total_rewards = []
       #display results
-      while True:
+      while (True, epoch<epochs)[epochs>0]:
         done = False
         rewards = []
         envstate = self.env.reset()
@@ -340,11 +342,15 @@ class NNEvo:
           qvals = model.predict(envstate.reshape(1, -1))[0]
           action = np.argmax(qvals)
           envstate, reward, done, info = self.env.step(action)
-          self.env.render()
+          if not epochs:
+            self.env.render()
           rewards.append(reward)
 
         print('Reward:', sum(rewards))
+        total_rewards.append(sum(rewards))
         rewards = []
+        epoch+=1
+      print('Epochs:', epoch, 'Average reward:', sum(total_rewards)/len(total_rewards))
   #----------------------------------------------------------------------------+
 
   #--- Validate Fitness -------------------------------------------------------+
