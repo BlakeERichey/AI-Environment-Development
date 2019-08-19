@@ -1,3 +1,4 @@
+#Master Version
 '''
 Created on Friday August 16, 2019
 
@@ -22,6 +23,9 @@ from   tensorflow.keras.callbacks  import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers     import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
 
+import gym_simulator
+from time import time
+
 
 class NNEvo:
 
@@ -30,8 +34,9 @@ class NNEvo:
     cxrt=.2,
     mxrt=.01, 
     layers=1, 
-    env=None, 
+    env=None,
     elitist=3,
+    sharpness=1, 
     cxtype='avg',
     population=10, 
     generations=10, 
@@ -49,6 +54,7 @@ class NNEvo:
         'layers': 1, 
         'env': None, 
         'elitist': 3,
+        'sharpness': 1,
         'cxtype': 'avg',
         'population': 10, 
         'generations': 10, 
@@ -69,7 +75,8 @@ class NNEvo:
     self.cxtype          = cxtype
     self.goal_met        = False
     self.num_layers      = layers
-    self.elitist         = elitist
+    self.elitist         = elitist  #epochs to run when evaluating fitness
+    self.sharpness       = sharpness
     self.selection_type  = selection  #selection type (cxrt/tour)
     self.activation      = activation 
     self.pop_size        = population
@@ -86,6 +93,7 @@ class NNEvo:
     self.weights_lengths = None
     self.plots = [] #points for matplotlib
     self.episodes = 0
+    
 
   #--- Initialize Population --------------------------------------------------+
   def create_nn(self):
@@ -127,11 +135,12 @@ class NNEvo:
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt is 1:
-        self.mxrt = 1/( self.weights_lengths[-1] * 2 )
+        self.mxrt = 1/( self.weights_lengths[-1] * 2.4 )
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
       print('Crossover Type:', self.cxtype)
       print('Selection Type:', self.selection_type)
+      print('Sharpness:', self.sharpness)
     return model
   
   def create_population(self):
@@ -148,18 +157,21 @@ class NNEvo:
       fitness function. Returns quality of model
       Runs 1 episode of environment
     '''
-
-    self.episodes += 1
-    done = False
-    rewards = []
-    envstate = self.env.reset()
-    while not done:
-      qvals = model.predict(envstate.reshape(1, -1))[0]
-      action = np.argmax(qvals)
-      envstate, reward, done, info = self.env.step(action)
-      rewards.append(reward)
+    total_rewards = []
+    for epoch in range(self.sharpness):
+      self.episodes += 1
+      done = False
+      rewards = []
+      envstate = self.env.reset()
+      while not done:
+        qvals = model.predict(envstate.reshape(1, -1))[0]
+        action = np.argmax(qvals)
+        envstate, reward, done, info = self.env.step(action)
+        rewards.append(reward)
+      
+      total_rewards.append(sum(rewards))
     
-    return sum(rewards)
+    return sum(total_rewards)/len(total_rewards)
   
   #----------------------------------------------------------------------------+
   
@@ -219,7 +231,7 @@ class NNEvo:
     parents = random.sample(parents, len(parents)) #randomize breeding pool
 
     #breed rest
-    i = 0
+    i = 0 #parent number, genes to get
     while len(children) < self.pop_size:
       parent1 = parents[i]
       parent2 = parents[len(parents)-i-1]
@@ -227,11 +239,29 @@ class NNEvo:
       parent1_genes = self.pop[parent1[0]]
       parent2_genes = self.pop[parent2[0]]
       if self.cxtype == 'splice':
-        #splice genes
-        geneA = int(random.random() * len(parent1_genes))
-        geneB = int(random.random() * len(parent1_genes))
+        if self.num_layers > 1:
+          genes = []
+          for index, len_ in enumerate(self.weights_lengths): #splice each layer
+            if index == 0:
+              range_ = (0, len_)
+            else:
+              range_ = (self.weights_lengths[index-1], len_)
 
-        child = splice_list(parent1_genes, parent2_genes, geneA, geneB)
+            #splice genes
+            start = range_[0]
+            end = range_[1]
+            geneA = random.randrange(start, end)
+            geneB = random.randrange(geneA, end+1)
+            geneA -= start
+            geneB -= start
+
+            genes.append(splice_list(parent1_genes[start:end], parent2_genes[start:end], geneA, geneB))
+          child = flatten(genes)
+        else:
+          geneA = random.randrange(0, len(parent1_genes))
+          geneB = random.randrange(geneA, len(parent1_genes)+1)
+
+          child = splice_list(parent1_genes, parent2_genes, geneA, geneB)
       else:
         child = ((np.array(parent1_genes) + np.array(parent2_genes)) / 2).tolist()
       
@@ -255,11 +285,17 @@ class NNEvo:
   
   #--- Train/Evaluate ---------------------------------------------------------+
 
-  def train(self):
+  def train(self, filename=None):
     self.create_population()
     print('Population created', len(self.pop))
+
+    if filename:
+      self.models[0].load_weights(filename)
+      self.pop[0] = self.serialize(self.models[0])
+      print('Model loaded from', filename)
+
     for i in range(self.generations):
-      print('\nGeneration:', i)
+      print('\nGeneration:', i+1, '/', self.generations)
       parents = self.selection()
       if not self.goal_met:
         print('Goal not met. Parents selected.')
@@ -381,11 +417,56 @@ def splice_list(list1, list2, index1, index2):
     and ending index `index2`
   '''
   if index1 == 0:
-    splice = list1[index1:index2]
-    splice += list2[index2:len(list1)]
+    splice = list1[index1:index2+1]
+    splice += list2[index2+1:len(list1)]
   else:
-    splice = list2[:index1] + list1[index1:index2]
-    splice += list2[index2:len(list1)]
+    splice = list2[:index1] + list1[index1:index2+1]
+    splice += list2[index2+1:len(list1)]
   
   return splice
+
+def flatten(L):
+  'flatten 2d list'
+  flat = []
+  for l in L:
+    flat += l
+  
+  return flat
 #------------------------------------------------------------------------------+
+
+
+env = gym.make('MountainCar-v0')
+print('Environment created')
+config = {
+  'tour': 4, 
+  'cxrt': .08,
+  'mxrt': 1,
+  'layers': 3, 
+  'env': env, 
+  'elitist': 3,
+  'sharpness': 1,
+  'cxtype': 'splice',
+  'population': 25, 
+  'generations': 100, 
+  'selection': 'tour',
+  'fitness_goal': -115,
+  'validation_size': 5,
+  'activation': 'softmax', 
+  'nodes_per_layer': [256 for _ in range(3)], 
+}
+
+#@profile
+def train():
+    agents = NNEvo(**config)
+    agents.train()
+    agents.show_plot()
+
+def evaluate():
+    agents = NNEvo(**config)
+    agents.evaluate('best_model.h5')
+
+start = time()
+train()
+end = time()
+print('Time training:', end-start)
+evaluate()
