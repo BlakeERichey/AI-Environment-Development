@@ -1,6 +1,7 @@
 Add Eligibility Trace to better enable an AI to have long-term goals  
 Add target/training network implementation
 Add rnn for cnns
+timeseries
 
 
 #Future Plans for NNEvo:
@@ -24,3 +25,5 @@ Add rnn for cnns
 
 gloabl best fit
 matrices instead of keras #negative of no cnns
+
+target model for dqagent to load nnevo model
