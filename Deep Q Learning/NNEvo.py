@@ -1,4 +1,3 @@
-#Master Version
 '''
 Created on Friday August 16, 2019
 
@@ -84,8 +83,12 @@ class NNEvo:
     self.fitness_goal    = fitness_goal
     self.validation_size = validation_size
     self.nodes_per_layer = nodes_per_layer
-    self.num_outputs     = self.env.action_space.n
     self.num_features    = self.env.observation_space.shape[0]
+    
+    outputs = 1
+    if hasattr(env.action_space, 'n'):
+      outputs = self.env.action_space.n
+    self.num_outputs     = outputs
 
     self.models = [] #list of individuals
     self.pop    = [] #population (2d-list of weights)
@@ -135,7 +138,7 @@ class NNEvo:
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt is 1:
-        self.mxrt = 1/( self.weights_lengths[-1] * 2.4 )
+        self.mxrt = 1/( self.weights_lengths[-1] * 1.8 )
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
       print('Crossover Type:', self.cxtype)
@@ -164,8 +167,7 @@ class NNEvo:
       rewards = []
       envstate = self.env.reset()
       while not done:
-        qvals = model.predict(envstate.reshape(1, -1))[0]
-        action = np.argmax(qvals)
+        action = self.predict(model, envstate)
         envstate, reward, done, info = self.env.step(action)
         rewards.append(reward)
       
@@ -274,9 +276,9 @@ class NNEvo:
     for ind, individual in enumerate(population):
       for i, gene in enumerate(individual):
         mxrt = self.mxrt
-        if self.pop_size > 10:
-          if ind == len(population) - 1: #Randomly initialize last child
-            mxrt = 1
+#        if self.pop_size > 10:
+#          if ind == len(population) - 1: #Randomly initialize last child
+#            mxrt = 1
         if random.random() < mxrt:
           individual[i] = random.uniform(-1, 1)
     
@@ -339,8 +341,7 @@ class NNEvo:
         rewards = []
         envstate = self.env.reset()
         while not done:
-          qvals = model.predict(envstate.reshape(1, -1))[0]
-          action = np.argmax(qvals)
+          action = self.predict(model, envstate)
           envstate, reward, done, info = self.env.step(action)
           if not epochs:
             self.env.render()
@@ -365,8 +366,7 @@ class NNEvo:
       rewards = []
       envstate = self.env.reset()
       while not done:
-        qvals = model.predict(envstate.reshape(1, -1))[0]
-        action = np.argmax(qvals)
+        action = self.predict(model, envstate)
         envstate, reward, done, info = self.env.step(action)
         rewards.append(reward)
 
@@ -388,6 +388,18 @@ class NNEvo:
   #----------------------------------------------------------------------------+
 
   #--- Helper Functions -------------------------------------------------------+
+
+  def predict(self, model, envstate):
+    qvals = model.predict(self.adj_envstate(envstate))[0]
+    if self.num_outputs == 1:
+      action = qvals
+    else:
+      action = np.argmax(qvals)
+    
+    return action
+
+  def adj_envstate(self, envstate):
+    return envstate.reshape(1, -1)
 
   def serialize(self, model):
     '''
@@ -441,24 +453,25 @@ def flatten(L):
 #------------------------------------------------------------------------------+
 
 
-env = gym.make('MountainCar-v0')
+env = gym.make('MountainCarContinuous-v0')
 print('Environment created')
+print(hasattr(env.action_space, 'n'))
 config = {
-  'tour': 4, 
-  'cxrt': .08,
+  'tour': 3, 
+  'cxrt': .04,
   'mxrt': 1,
-  'layers': 3, 
+  'layers': 2, 
   'env': env, 
-  'elitist': 3,
+  'elitist': 2,
   'sharpness': 1,
   'cxtype': 'splice',
-  'population': 25, 
-  'generations': 100, 
+  'population': 10, 
+  'generations': 80, 
   'selection': 'tour',
-  'fitness_goal': -115,
-  'validation_size': 5,
-  'activation': 'softmax', 
-  'nodes_per_layer': [256 for _ in range(3)], 
+  'fitness_goal': 90,
+  'validation_size': 1,
+  'activation': 'linear', 
+  'nodes_per_layer': [512 for _ in range(2)], 
 }
 
 #@profile
