@@ -13,6 +13,7 @@ import os, datetime, random
 import numpy             as np
 import tensorflow        as tf
 import matplotlib.pyplot as plt
+from   time                        import time
 from   tensorflow.keras.optimizers import Adam
 from   collections                 import deque
 from   tensorflow.keras            import backend
@@ -21,9 +22,6 @@ from   tensorflow.python.client    import device_lib
 from   tensorflow.keras.callbacks  import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers     import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
-
-import gym_simulator
-from time import time
 
 
 class NNEvo:
@@ -67,22 +65,22 @@ class NNEvo:
 
     self.default_nodes   = 20
     self.env             = env
-    self.mxrt            = mxrt
-    self.cxrt            = cxrt   #chance of parent being selected (crossover rate)
-    self.best_fit        = None
-    self.tour            = tour
-    self.cxtype          = cxtype
-    self.goal_met        = False
-    self.num_layers      = layers
-    self.elitist         = elitist  #epochs to run when evaluating fitness
-    self.sharpness       = sharpness
-    self.selection_type  = selection  #selection type (cxrt/tour)
-    self.activation      = activation 
-    self.pop_size        = population
-    self.generations     = generations
-    self.fitness_goal    = fitness_goal
-    self.validation_size = validation_size
-    self.nodes_per_layer = nodes_per_layer
+    self.mxrt            = mxrt        #chance of a single weight being mutated
+    self.cxrt            = cxrt        #chance of parent being selected (crossover rate)
+    self.best_fit        = None        #(model, fitness) with best fitness
+    self.tour            = tour        #tournament sample size when using tour selection policy
+    self.cxtype          = cxtype      #cross over type (gene splicing or avging)
+    self.goal_met        = False       #holds model number that meets fitness goal
+    self.num_layers      = layers      #qty of hidden layers
+    self.elitist         = elitist     #n best models transitioned into nxt gen
+    self.sharpness       = sharpness   #epochs to run when evaluating fitness
+    self.selection_type  = selection   #selection type (cxrt/tour)
+    self.activation      = activation  #activation type for output layer
+    self.pop_size        = population  #number of neural nets in population
+    self.generations     = generations 
+    self.fitness_goal    = fitness_goal #goal for fitness (episode score) to reach
+    self.validation_size = validation_size #number of episodes to run to validate a models success in reaching a fitness goal
+    self.nodes_per_layer = nodes_per_layer #list of qty of nodes in each hidden layer
     self.num_features    = self.env.observation_space.shape[0]
     
     outputs = 1
@@ -90,7 +88,7 @@ class NNEvo:
       outputs = self.env.action_space.n
     self.num_outputs     = outputs
 
-    self.models = [] #list of individuals
+    self.models = [] #list of individuals 
     self.pop    = [] #population (2d-list of weights)
     self.weight_shapes   = None
     self.weights_lengths = None
@@ -118,7 +116,7 @@ class NNEvo:
         model.add(Dense(units = nodes, activation = 'relu'))
     
     #output layer
-    model.add(Dense(units = self.num_outputs, activation = self.activation, name='dense_output'))
+    model.add(Dense(units = self.num_outputs, activation = self.activation))
     model.compile(optimizer = Adam(lr=0.001), loss = 'mse', metrics=['accuracy'])
 
     #create deserialize dependencies
@@ -390,11 +388,12 @@ class NNEvo:
   #--- Helper Functions -------------------------------------------------------+
 
   def predict(self, model, envstate):
-    qvals = model.predict(self.adj_envstate(envstate))[0]
+    ''' decide best action for model. '''
+    qvals = model.predict(self.adj_envstate(envstate))[0] 
     if self.num_outputs == 1:
-      action = qvals
+      action = qvals #continuous action space
     else:
-      action = np.argmax(qvals)
+      action = np.argmax(qvals) #discrete action space
     
     return action
 
@@ -453,25 +452,25 @@ def flatten(L):
 #------------------------------------------------------------------------------+
 
 
-env = gym.make('MountainCarContinuous-v0')
+env = gym.make('MountainCar-v0')
 print('Environment created')
 print(hasattr(env.action_space, 'n'))
 config = {
-  'tour': 3, 
+  'tour': 5, 
   'cxrt': .04,
   'mxrt': 1,
-  'layers': 2, 
+  'layers': 1, 
   'env': env, 
-  'elitist': 2,
+  'elitist': 3,
   'sharpness': 1,
   'cxtype': 'splice',
-  'population': 10, 
-  'generations': 80, 
+  'population': 20, 
+  'generations': 200, 
   'selection': 'tour',
-  'fitness_goal': 90,
+  'fitness_goal': -110,
   'validation_size': 1,
   'activation': 'linear', 
-  'nodes_per_layer': [512 for _ in range(2)], 
+  'nodes_per_layer': [512 for _ in range(1)], 
 }
 
 #@profile
