@@ -2,6 +2,10 @@ Add Eligibility Trace to better enable an AI to have long-term goals
 Add target/training network implementation
 Add rnn for cnns
 timeseries
+a3c
+neuroevolution + agent/critic
+cnn+lstm video/minecraft
+stocks gym environment reinforcement learning
 
 
 #Future Plans for NNEvo:
