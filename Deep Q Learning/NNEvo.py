@@ -456,7 +456,7 @@ env = gym.make('MountainCar-v0')
 print('Environment created')
 print(hasattr(env.action_space, 'n'))
 config = {
-  'tour': 5, 
+  'tour': 3, 
   'cxrt': .04,
   'mxrt': 1,
   'layers': 1, 
@@ -464,11 +464,11 @@ config = {
   'elitist': 3,
   'sharpness': 1,
   'cxtype': 'splice',
-  'population': 20, 
-  'generations': 200, 
+  'population': 10, 
+  'generations': 4, 
   'selection': 'tour',
-  'fitness_goal': -110,
-  'validation_size': 1,
+  'fitness_goal': -120,
+  'validation_size': 10,
   'activation': 'linear', 
   'nodes_per_layer': [512 for _ in range(1)], 
 }
