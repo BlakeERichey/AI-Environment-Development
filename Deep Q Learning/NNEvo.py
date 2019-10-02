@@ -452,11 +452,11 @@ def flatten(L):
 #------------------------------------------------------------------------------+
 
 
-env = gym.make('MountainCar-v0')
+env = gym.make('CartPole-v0')
 print('Environment created')
 print(hasattr(env.action_space, 'n'))
 config = {
-  'tour': 3, 
+  'tour': 4, 
   'cxrt': .04,
   'mxrt': 1,
   'layers': 1, 
@@ -464,13 +464,13 @@ config = {
   'elitist': 3,
   'sharpness': 1,
   'cxtype': 'splice',
-  'population': 10, 
-  'generations': 4, 
+  'population': 15, 
+  'generations': 100, 
   'selection': 'tour',
-  'fitness_goal': -120,
+  'fitness_goal': 200,
   'validation_size': 10,
-  'activation': 'linear', 
-  'nodes_per_layer': [512 for _ in range(1)], 
+  'activation': 'softmax', 
+  'nodes_per_layer': [24 for _ in range(1)], 
 }
 
 #@profile

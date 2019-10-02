@@ -32,13 +32,13 @@ def load_json(filename):
     return obj
 
 #------ Variables -------------------------------------------------------------+
-active = ['aapl', 'amd', 'amzn', 'atvi', 'msft', 'nvda', 'roku']
+active = ['aapl', 'amd', 'amzn', 'atvi', 'msft', 'nvda', 'roku', 'ea']
 
 batch_size = 5
 days       = 50
 fit        = True
 epochs     = 1000
-stock      = 'msft'
+stock      = 'ea'
 req        = True #make new api request?
 
 stock_path = f'./{stock}/'
@@ -127,7 +127,7 @@ month, day = now.month, now.day
 plt.savefig(stock_path+f'{month}-{day}')
 plt.show()
 
-with open(stock_path+f'pred', 'w') as file:
+with open(stock_path+f'pred_{month}-{day}', 'w') as file:
   out = f'{stock}, R:{r}' + '\n'
   out += f'{month}-{day} Close: ' + str(true_y[-1]) + '\n'
   out += f"Next Day Guess: {tomorrow+mean_adj}"
