@@ -34,20 +34,20 @@ model.add(Dense(10, activation='softmax'))
 #compile model using accuracy to measure model performance
 model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
-model.load_weights('numbers.h5')
-
-#train the model
-#model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=2)
-
-#predict first 4 images in the test set
-import numpy as np
-predictions = model.predict(X_test[:30])
-for arr in predictions:
-  print(np.argmax(arr), end = ', ')
-print()
-print(', '.join([str(np.argmax(val)) for val in y_test[:30]]))
-
-model.save_weights('numbers.h5', overwrite=True)
-
-#actual results for first 4 images in test set
-y_test[:4]
+#model.load_weights('numbers.h5')
+#
+##train the model
+##model.fit(X_train, y_train, validation_data=(X_test, y_test), epochs=2)
+#
+##predict first 4 images in the test set
+#import numpy as np
+#predictions = model.predict(X_test[:30])
+#for arr in predictions:
+# print(np.argmax(arr), end = ', ')
+#print()
+#print(', '.join([str(np.argmax(val)) for val in y_test[:30]]))
+#
+#model.save_weights('numbers.h5', overwrite=True)
+#
+##actual results for first 4 images in test set
+#y_test[:4]
