@@ -1,6 +1,6 @@
 #learn classifiers from a video
 
-import gym
+#import gym
 import os, datetime, random
 import numpy             as np
 import tensorflow        as tf
@@ -19,7 +19,7 @@ from keras.preprocessing.image import load_img
 from keras.preprocessing.image import img_to_array
 from keras.utils import to_categorical
 
-num_images = 119
+num_images = 607
 images = []
 for i in range(num_images):
   filename = f'./images/image{i}.jpg'
@@ -33,14 +33,27 @@ for i in range(num_images):
   images.append(numpy_image)
 #images_batch = np.array([np.expand_dims(image, axis=0) for image in images])
 images_batch = np.array(images)
-images_batch.reshape(num_images,256,256,3)
+images_batch.reshape((num_images,256,256,3))
 
 #print('image:', images[0])
 #plt.imshow(np.uint8(images_batch[0])) #render an image
 
-classes = [0 for i in range(23)]
-classes += [1 for i in range(23, 77)]
-classes += [0 for i in range(77, 119)]
+zeros = [(0,4), (75, 116), (208, 277), (387, 456), (576, 607)]
+ones =  [(4, 75), (116, 208), (277, 387), (456, 576)]
+
+classes = [0 for _ in range(num_images)]
+
+for tup in zeros:
+  a = tup[0]
+  b = tup[1]
+  for i in range(a, b):
+    classes[i] = 0
+
+for tup in ones:
+  a = tup[0]
+  b = tup[1]
+  for i in range(a, b):
+    classes[i] = 1
 
 classes = to_categorical(classes)
 print('Classes:', classes[0], classes[56])
@@ -90,7 +103,7 @@ model.compile(optimizer=Adam(lr=0.001), \
 model.summary()
 
 #-------------------- train model --------------------
-model.fit(images_batch, classes, verbose=1, batch_size=12, epochs=10, validation_split=0.2)
+model.fit(images_batch, classes, verbose=1, batch_size=12, epochs=30, validation_split=0.2)
 model.save_weights('./model/'+f'model.h5')
 
 #-------------------- Test model --------------------

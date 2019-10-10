@@ -1,6 +1,6 @@
 #convert video to images
 
-video_name = 'coke.mp4'
+video_name = 'bottle.mp4'
 dest = './images/'
 
 import cv2
