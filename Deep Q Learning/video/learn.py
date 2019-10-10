@@ -103,10 +103,10 @@ model.compile(optimizer=Adam(lr=0.001), \
 model.summary()
 
 #-------------------- train model --------------------
-model.fit(images_batch, classes, verbose=1, batch_size=12, epochs=30, validation_split=0.2)
-model.save_weights('./model/'+f'model.h5')
+#model.fit(images_batch, classes, verbose=1, batch_size=12, epochs=30, validation_split=0.2)
+#model.save_weights('./model/'+f'model.h5')
 
 #-------------------- Test model --------------------
-#model.load_weights('./model/'+f'model.h5')
+model.load_weights('./model/'+f'model.h5')
 #print(model.predict(np.expand_dims(images_batch[0], axis=0)))
-#print(model.predict(images_batch[73:82]))
+print(model.predict(images_batch[73:82]))
