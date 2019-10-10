@@ -65,13 +65,13 @@ print('Shape:', classes.shape)
 model = Sequential()
 
 num_layers = 3
-nodes_per_layer = [128, 128, 64]
+nodes_per_layer = [64, 64, 32]
 filter_size = 3
 num_classes = 2
 
 #pooling options
-stride_size = 2
-pool_size = 2
+stride_size = 3
+pool_size = 3
 for layer in range(num_layers):
 
   try:
@@ -103,10 +103,12 @@ model.compile(optimizer=Adam(lr=0.001), \
 model.summary()
 
 #-------------------- train model --------------------
-#model.fit(images_batch, classes, verbose=1, batch_size=12, epochs=30, validation_split=0.2)
-#model.save_weights('./model/'+f'model.h5')
+ckpt = ModelCheckpoint('./model/best_model.h5', monitor='val_accuracy', \
+    verbose=0, save_weights_only=True, save_best_only=True)
+model.fit(images_batch, classes, verbose=1, batch_size=4, epochs=10, validation_split=0.1, callbacks=[ckpt])
+model.save_weights('./model/'+f'model.h5')
 
 #-------------------- Test model --------------------
-model.load_weights('./model/'+f'model.h5')
+#model.load_weights('./model/'+f'model.h5')
 #print(model.predict(np.expand_dims(images_batch[0], axis=0)))
-print(model.predict(images_batch[73:82]))
+#print(model.predict(images_batch[73:82]))
