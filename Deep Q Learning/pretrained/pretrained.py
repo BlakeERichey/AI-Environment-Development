@@ -23,10 +23,10 @@ from keras.preprocessing.image import img_to_array
 from keras.applications.imagenet_utils import decode_predictions
 import matplotlib.pyplot as plt
  
-for name in ['chips', 'can', 'coke', 'nacho', 'water_bottle']:
+for name in ['../video/test_image1']:
   filename = name+'.jpg'
   # load an image in PIL format
-  original = load_img(filename, target_size=(224, 224))
+  original = load_img(filename, target_size=(32, 32))
   print('PIL image size',original.size)
   # plt.imshow(original)
   # plt.show()

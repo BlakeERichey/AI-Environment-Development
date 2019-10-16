@@ -11,8 +11,8 @@ from keras.models import Model
 from keras import layers
 
 batch_size = 64
-epochs = 12
-subset_frac = 0.3
+epochs = 25
+subset_frac = .99
 
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 
