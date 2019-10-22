@@ -13,7 +13,7 @@ from keras import layers
 from tensorflow.keras.callbacks  import TensorBoard, ModelCheckpoint, EarlyStopping
 
 batch_size = 32
-epochs = 50
+epochs = 35
 dim = 192
 
 from keras.preprocessing.image import load_img
@@ -73,7 +73,9 @@ pretrained.compile(RMSprop(lr=1e-3), 'categorical_crossentropy', metrics=['acc']
 
 #ckpt = ModelCheckpoint('./model/best_model.h5', monitor='val_loss', \
 #    verbose=0, save_weights_only=True, save_best_only=True)
-pretrained_history = pretrained.fit(images_batch, classes, verbose=1, batch_size=batch_size, epochs=epochs, validation_data=(images_valid, classes_valid))
+
+es = EarlyStopping(monitor='val_loss', min_delta=0, patience=8, verbose=0, mode='auto', baseline=None, restore_best_weights=True)
+pretrained_history = pretrained.fit(images_batch, classes, verbose=1, batch_size=batch_size, epochs=epochs, validation_data=(images_valid, classes_valid), callbacks=[es])
 
 #pretrained.load_weights('./model/transfer_model.h5')
 score = pretrained.evaluate(images_batch, classes, batch_size=batch_size)
