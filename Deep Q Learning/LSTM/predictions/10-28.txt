@@ -1,0 +1,11 @@
+Predictions:
+Apple: Up* 4x246.75
+AMD: Down*
+AMZN: Up?
+MSFT: Down*
+Atvi: Up?
+NVDA: Up* 5x204.75
+EA: Down
+
+= 1023.75 + 987
+= 2010.75
