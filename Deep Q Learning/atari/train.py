@@ -20,7 +20,7 @@ agent_opts = {
                 'REPLAY_BATCH_SIZE':      16,
                 'LEARNING_BATCH_SIZE':     6,
                 'DISCOUNT':              .9,
-                'MAX_STEPS':             1000,
+                'MAX_STEPS':             5000,
                 'REPLAY_MEMORY_SIZE':    500,
                 'LEARNING_RATE':         0.001,
                 

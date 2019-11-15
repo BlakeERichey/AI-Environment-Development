@@ -273,7 +273,7 @@ class DQAgent(Utilities):
 
               #compile model using accuracy to measure model performance
               model.compile(optimizer=Adam(lr=self.learning_rate), \
-                loss='mse', metrics=['accuracy'])
+                loss='categorical_crossentropy', metrics=['accuracy'])
 
               model.summary()             
 
