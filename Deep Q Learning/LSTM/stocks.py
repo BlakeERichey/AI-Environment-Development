@@ -32,7 +32,7 @@ def load_json(filename):
     return obj
 
 #------ Variables -------------------------------------------------------------+
-active = ['aapl', 'amd', 'amzn', 'atvi', 'ea', 'msft', 'nvda', 'roku', 'lub']
+active = ['aapl', 'amd', 'amzn', 'atvi', 'ea', 'msft', 'nvda', 'roku', 'lub', 'fb']
 for stock in active:
     batch_size = 5
     days       = 50
