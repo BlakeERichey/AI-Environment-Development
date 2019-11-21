@@ -77,7 +77,7 @@ class NNEvo:
     self.goal_met        = False       #holds model number that meets fitness goal
     self.num_layers      = layers      #qty of hidden layers
     self.elitist         = elitist     #n best models transitioned into nxt gen
-    self.transfer        = transfer
+    self.transfer        = transfer    #implement transfer cnn
     self.sharpness       = sharpness   #epochs to run when evaluating fitness
     self.selection_type  = selection   #selection type (cxrt/tour)
     self.activation      = activation  #activation type for output layer
@@ -149,11 +149,12 @@ class NNEvo:
       print('Sharpness:', self.sharpness)
     return model
   
-  def create_transfer_cnn(self, ref_model=None, y_dim=192, x_dim=192, rgb=3, fcn_weights=None):
+  def create_transfer_cnn(self, ref_model=None, fcn_weights=None):
     '''creates resnet model. will load deserialized weights by passing in weights'''
 
     if not ref_model:
-      model = ResNet50(weights='imagenet', include_top=False, input_shape=(y_dim, x_dim, rgb))
+      self.env.observation_space.shape[0]
+      model = ResNet50(weights='imagenet', include_top=False, input_shape=(self.env.observation_space.shape))
       for layer in model.layers:
         layer.trainable = False
       
@@ -184,12 +185,16 @@ class NNEvo:
       model = ref_model
 
       if fcn_weights:
-        weights = model.get_weights()[-len(self.weight_shapes):]
-        print('Deserialized weights length:', len(weights))
+        all_weights = model.get_weights()
+        untrainable = all_weights[:-len(self.weight_shapes)]
+        weights = all_weights[-len(self.weight_shapes):]
+        # print('Deserialized weights length:', len(weights))
         for i, matrix in enumerate(weights):
-          print('Original', matrix)
+          # print('Original', matrix)
           matrix[:] = fcn_weights[i]
-          print('Result', matrix)
+          # print('Result', matrix)
+      
+        model.set_weights(untrainable + weights)
     
     #create deserialize dependencies
     if self.weight_shapes is None:
@@ -221,13 +226,15 @@ class NNEvo:
     return model
   
   def create_population(self):
-    for _ in range(self.pop_size):
+    for i in range(self.pop_size):
       if self.transfer:
         model = self.create_transfer_cnn()
       else:
         model = self.create_nn()
       self.models.append(model)
       self.pop.append(self.serialize(model))
+
+      print('Model', i+1, 'created.')
   #----------------------------------------------------------------------------+
 
   #--- Fitness Calculation ----------------------------------------------------+
@@ -237,6 +244,7 @@ class NNEvo:
       fitness function. Returns quality of model
       Runs 1 episode of environment
     '''
+    print('Testing model...')
     total_rewards = []
     for epoch in range(self.sharpness):
       self.episodes += 1
@@ -266,6 +274,7 @@ class NNEvo:
       fitness = self.quality(model)
       ranked.append((i, fitness))
       if self.fitness_goal is not None and fitness >= self.fitness_goal:
+        '''goal met? If so, early stop'''
         if self.validation_size:
           valid = self.validate(self.models[i])
         else:
@@ -291,7 +300,7 @@ class NNEvo:
 
       elif self.selection_type == 'cxrt':
         while len(selection) < self.pop_size:
-          for model in ranked:
+          for model in random.sample(ranked, len(ranked)):
             if random.random() < self.cxrt:
               selection.append(model)
             
@@ -350,14 +359,25 @@ class NNEvo:
     return children
   
   def mutate(self, population):
-    for ind, individual in enumerate(population):
-      for i, gene in enumerate(individual):
-        mxrt = self.mxrt
-#        if self.pop_size > 10:
-#          if ind == len(population) - 1: #Randomly initialize last child
-#            mxrt = 1
-        if random.random() < mxrt:
-          individual[i] = random.uniform(-1, 1)
+    if self.transfer:
+      '''randomize layers'''
+      begin = 0
+      for ind, individual in enumerate(population):
+        for i, val in enumerate(self.weights_lengths):
+          if random.random() < self.mxrt:
+            for gene in range(begin, val):
+              individual[gene] = random.uniform(-1, 1)
+          begin=val
+
+    else:   
+      for ind, individual in enumerate(population):
+        for i, gene in enumerate(individual):
+          mxrt = self.mxrt
+  #        if self.pop_size > 10:
+  #          if ind == len(population) - 1: #Randomly initialize last child
+  #            mxrt = 1
+          if random.random() < mxrt:
+            individual[i] = random.uniform(-1, 1)
     
     return population
   #----------------------------------------------------------------------------+
@@ -386,8 +406,14 @@ class NNEvo:
         
         print('New pop:', len(new_pop))
         self.pop = new_pop
-        for i, individual in enumerate(new_pop):
-          self.models[i].set_weights(self.deserialize(individual))
+        #create new pop
+        if self.transfer:
+          for i, individual in enumerate(new_pop):
+            model = self.models[i]
+            self.models[i] = self.create_transfer_cnn(ref_model=model, fcn_weights=individual)
+        else: 
+          for i, individual in enumerate(new_pop):
+            self.models[i].set_weights(self.deserialize(individual))
       else:
         print(f'Goal met! Episodes: {self.episodes}')
         self.goal_met.save_weights('best_model.h5')
@@ -404,7 +430,10 @@ class NNEvo:
     if self.goal_met or filename:
       #load model
       if filename:
-        model = self.create_nn()
+        if self.transfer:
+          model = self.create_transfer_cnn()
+        else:
+          model = self.create_nn()
         model.load_weights(filename)
         print(f'Weights loaded from {filename}')
       else:
@@ -477,13 +506,19 @@ class NNEvo:
     return action
 
   def adj_envstate(self, envstate):
+    if self.transfer:
+      return np.expand_dims(envstate, axis=0)
     return envstate.reshape(1, -1)
 
   def serialize(self, model):
     '''
       serializes model's weights into a gene string
     '''
-    weights = model.get_weights()
+    
+    if self.transfer:
+        weights = model.get_weights()[-len(self.weight_shapes):]
+    else:
+        weights = model.get_weights()
     flattened = []
     for arr in weights:
       flattened+=arr.reshape(1, -1)[0].tolist()
@@ -531,48 +566,32 @@ def flatten(L):
 #------------------------------------------------------------------------------+
 
 
-env = gym.make('CartPole-v0')
+env = gym.make('BattleZone-v0')
 print('Environment created')
 # print(hasattr(env.action_space, 'n'))
 
 config = {
   'tour': 3, 
   'cxrt': .2,
-  'mxrt': .01,
-  'layers': 4, 
+  'mxrt': .05,
+  'layers': 3, 
   'env': env, 
   'elitist': 3,
   'sharpness': 1,
-  'cxtype': 'avg',
-  'population': 10, 
-  'generations': 10, 
+  'cxtype': 'splice',
+  'population': 15, 
+  'generations': 15, 
   'transfer': True,
-  'selection': 'tour',
-  'fitness_goal': 200,
+  'selection': 'cxrt',
+  'fitness_goal': None,
   'validation_size': 0,
   'activation': 'softmax', 
-  'nodes_per_layer': [2, 64, 32, 3], 
+  'nodes_per_layer': [2, 64, 32], 
 }
 
-#@profile
-def train():
-    agents = NNEvo(**config)
-    agents.train()
-    agents.show_plot()
-
-def evaluate():
-    agents = NNEvo(**config)
-    agents.evaluate('best_model.h5')
-
 agents = NNEvo(**config)
-agents.create_population()
-print('Population created')
-
-prior = agents.pop
-new_pop = agents.mutate(agents.pop)
-print('New pop', prior == new_pop, prior[0][-10:], new_pop[0][-10:])
-print('Deserialized weights', agents.deserialize(new_pop[0]))
-agents.create_transfer_cnn(ref_model=agents.models[0], fcn_weights=agents.deserialize(new_pop[0]))
+agents.train()
+agents.show_plot()
 
 
 # start = time()
