@@ -25,6 +25,8 @@ from   tensorflow.keras.callbacks    import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers       import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
 
+from threading import Thread
+
 
 class NNEvo:
 
@@ -41,6 +43,7 @@ class NNEvo:
     transfer=False,
     generations=10, 
     selection='tour',
+    mx_type='default',
     fitness_goal=200,
     validation_size=0,
     activation='linear', 
@@ -61,6 +64,7 @@ class NNEvo:
         'transfer': False,
         'selection': 'tour',
         'fitness_goal': 200,
+        'mx_type': 'default',
         'validation_size': 0,
         'activation': 'linear', 
         'nodes_per_layer': [4], 
@@ -76,6 +80,7 @@ class NNEvo:
     self.cxtype          = cxtype      #cross over type (gene splicing or avging)
     self.goal_met        = False       #holds model number that meets fitness goal
     self.num_layers      = layers      #qty of hidden layers
+    self.mx_type         = mx_type
     self.elitist         = elitist     #n best models transitioned into nxt gen
     self.transfer        = transfer    #implement transfer cnn
     self.sharpness       = sharpness   #epochs to run when evaluating fitness
@@ -177,7 +182,10 @@ class NNEvo:
         else:
           add_layer = Dense(units = nodes, activation = 'relu')(add_layer)
       
-      output = Dense(units = self.num_outputs, activation = self.activation)(add_layer)
+      if self.num_layers:
+        output = Dense(units = self.num_outputs, activation = self.activation)(add_layer)
+      else:
+        output = Dense(units = self.num_outputs, activation = self.activation)(flattened)
 
       model = Model(model.inputs, output)
       model.compile(Adam(lr=1e-3), 'categorical_crossentropy', metrics=['acc'])
@@ -239,12 +247,12 @@ class NNEvo:
 
   #--- Fitness Calculation ----------------------------------------------------+
 
-  def quality(self, model):
+  def quality(self, model, i):
     '''
       fitness function. Returns quality of model
       Runs 1 episode of environment
     '''
-    print('Testing model...')
+    print(f'Testing model {i}...', end='')
     total_rewards = []
     for epoch in range(self.sharpness):
       self.episodes += 1
@@ -258,7 +266,9 @@ class NNEvo:
       
       total_rewards.append(sum(rewards))
     
-    return sum(total_rewards)/len(total_rewards)
+    result = sum(total_rewards)/len(total_rewards)
+    print(result)
+    return result
   
   #----------------------------------------------------------------------------+
   
@@ -271,10 +281,10 @@ class NNEvo:
 
     ranked = [] #ranked models, best to worst
     for i, model in enumerate(self.models):
-      fitness = self.quality(model)
+      fitness = self.quality(model, i)
       ranked.append((i, fitness))
       if self.fitness_goal is not None and fitness >= self.fitness_goal:
-        '''goal met? If so, early stop'''
+        #goal met? If so, early stop
         if self.validation_size:
           valid = self.validate(self.models[i])
         else:
@@ -359,7 +369,7 @@ class NNEvo:
     return children
   
   def mutate(self, population):
-    if self.transfer:
+    if self.mx_type!='default':
       '''randomize layers'''
       begin = 0
       for ind, individual in enumerate(population):
@@ -373,9 +383,9 @@ class NNEvo:
       for ind, individual in enumerate(population):
         for i, gene in enumerate(individual):
           mxrt = self.mxrt
-  #        if self.pop_size > 10:
-  #          if ind == len(population) - 1: #Randomly initialize last child
-  #            mxrt = 1
+          if self.pop_size > 10:
+            if ind == len(population) - 1: #Randomly initialize last child
+              mxrt = 1
           if random.random() < mxrt:
             individual[i] = random.uniform(-1, 1)
     
@@ -573,26 +583,27 @@ print('Environment created')
 config = {
   'tour': 3, 
   'cxrt': .2,
-  'mxrt': .05,
-  'layers': 3, 
+  'mxrt': 1,
+  'layers': 0, 
   'env': env, 
-  'elitist': 3,
+  'elitist': 4,
   'sharpness': 1,
   'cxtype': 'splice',
-  'population': 15, 
-  'generations': 15, 
+  'population': 40, 
+  'generations': 40, 
   'transfer': True,
-  'selection': 'cxrt',
-  'fitness_goal': None,
+  'mx_type': 'default',
+  'selection': 'tour',
+  'fitness_goal': 12000,
   'validation_size': 0,
-  'activation': 'softmax', 
-  'nodes_per_layer': [2, 64, 32], 
+  'activation': 'linear', 
+  'nodes_per_layer': [], 
 }
 
 agents = NNEvo(**config)
 agents.train()
 agents.show_plot()
-
+agents.evaluate()
 
 # start = time()
 # train()
