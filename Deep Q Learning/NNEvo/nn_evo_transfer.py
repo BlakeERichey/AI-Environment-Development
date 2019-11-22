@@ -25,21 +25,19 @@ from   tensorflow.keras.callbacks    import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers       import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
 
-from threading import Thread
-
 
 class NNEvo:
 
   def __init__(self, 
     tour=3, 
     cxrt=.2,
-    mxrt=.01, 
     layers=1, 
     env=None,
     elitist=3,
     sharpness=1, 
     cxtype='avg',
     population=10, 
+    mxrt='default', 
     transfer=False,
     generations=10, 
     selection='tour',
@@ -53,15 +51,15 @@ class NNEvo:
       config = {
         'tour': 3, 
         'cxrt': .2,
-        'mxrt': .01,
         'layers': 1, 
         'env': None, 
         'elitist': 3,
         'sharpness': 1,
         'cxtype': 'avg',
         'population': 10, 
-        'generations': 10, 
+        'mxrt': 'default',
         'transfer': False,
+        'generations': 10, 
         'selection': 'tour',
         'fitness_goal': 200,
         'mx_type': 'default',
@@ -145,7 +143,7 @@ class NNEvo:
           self.weights_lengths.append(length)
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
-      if self.mxrt is 1:
+      if self.mxrt == 'default':
         self.mxrt = 1/( self.weights_lengths[-1] * 1.8 )
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
@@ -188,11 +186,13 @@ class NNEvo:
         output = Dense(units = self.num_outputs, activation = self.activation)(flattened)
 
       model = Model(model.inputs, output)
-      model.compile(Adam(lr=1e-3), 'categorical_crossentropy', metrics=['acc'])
+      model.compile(Adam(lr=1e-3), 'mse', metrics=['acc'])
     else:
       model = ref_model
 
       if fcn_weights:
+        assert len(fcn_weights) == len(self.weight_shapes), \
+          f'Invalid Weight Structure. Expected {len(self.weight_shapes)}, got {len(fcn_weights)}.'
         all_weights = model.get_weights()
         untrainable = all_weights[:-len(self.weight_shapes)]
         weights = all_weights[-len(self.weight_shapes):]
@@ -222,7 +222,7 @@ class NNEvo:
           self.weights_lengths.append(length)
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
-      if self.mxrt is 1:
+      if self.mxrt == 'default':
         self.mxrt = 1/( self.weights_lengths[-1] * 1.8 )
       print('Weight Shapes:', self.weight_shapes)
       print('Weight Lengths:', self.weights_lengths)
@@ -420,7 +420,9 @@ class NNEvo:
         if self.transfer:
           for i, individual in enumerate(new_pop):
             model = self.models[i]
-            self.models[i] = self.create_transfer_cnn(ref_model=model, fcn_weights=individual)
+            self.models[i] = self.create_transfer_cnn(\
+              ref_model=model, fcn_weights=agents.deserialize(individual)
+            )
         else: 
           for i, individual in enumerate(new_pop):
             self.models[i].set_weights(self.deserialize(individual))
@@ -583,18 +585,18 @@ print('Environment created')
 config = {
   'tour': 3, 
   'cxrt': .2,
-  'mxrt': 1,
   'layers': 0, 
   'env': env, 
-  'elitist': 4,
+  'elitist': 2,
   'sharpness': 1,
   'cxtype': 'splice',
-  'population': 40, 
-  'generations': 40, 
+  'population': 15, 
+  'mxrt': 'default',
   'transfer': True,
+  'generations': 40, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': 12000,
+  'fitness_goal': 10000,
   'validation_size': 0,
   'activation': 'linear', 
   'nodes_per_layer': [], 
