@@ -377,21 +377,23 @@ class NNEvo:
       '''randomize layers'''
       begin = 0
       for ind, individual in enumerate(population):
-        for i, val in enumerate(self.weights_lengths):
-          if random.random() < self.mxrt:
-            for gene in range(begin, val):
-              individual[gene] = random.uniform(-1, 1)
-          begin=val
+        if ind >= self.elitist:
+          for i, val in enumerate(self.weights_lengths):
+            if random.random() < self.mxrt:
+              for gene in range(begin, val):
+                individual[gene] = random.uniform(-1, 1)
+            begin=val
 
     else:   
       for ind, individual in enumerate(population):
-        for i, gene in enumerate(individual):
-          mxrt = self.mxrt
-          if self.random_children and mxrt != 1:
-            if ind == len(population) - self.random_children: #Randomly initialize last child
-              mxrt = 1
-          if random.random() < mxrt:
-            individual[i] = random.uniform(-1, 1)
+        if ind >= self.elitist: #ignore elites
+          for i, gene in enumerate(individual):
+            mxrt = self.mxrt
+            if self.random_children and mxrt != 1:
+              if ind == len(population) - self.random_children: #Randomly initialize last child
+                mxrt = 1
+            if random.random() < mxrt:
+              individual[i] = random.uniform(-1, 1)
     
     return population
   #----------------------------------------------------------------------------+
@@ -595,18 +597,19 @@ config = {
   'sharpness': 2,
   'cxtype': 'splice',
   'population': 16, 
-  'mxrt': 'default',
+  'mxrt': 0.00002,
   'transfer': True,
-  'generations': 15, 
+  'generations': 20, 
   'mx_type': 'default',
   'selection': 'tour',
   'fitness_goal': 6000,
-  'random_children': 2,
+  'random_children': 1,
   'validation_size': 2,
   'activation': 'linear', 
   'nodes_per_layer': [], 
 }
 
+#train model
 try:
     agents = NNEvo(**config)
     agents.train('best_model.h5')
@@ -616,3 +619,10 @@ except:
     print('\nAborting...')
     agents.models[agents.best_fit[0]].save_weights('ex_model.h5')
     print('Best results saved to ex_model.h5')
+
+#test model
+# try:
+#     agents = NNEvo(**config)
+#     agents.evaluate('ex_model.h5')
+# except:
+#     env.close()
