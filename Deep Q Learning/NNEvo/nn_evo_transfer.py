@@ -42,9 +42,10 @@ class NNEvo:
     generations=10, 
     selection='tour',
     mx_type='default',
+    random_children=1, 
     fitness_goal=200,
     validation_size=0,
-    activation='linear', 
+    activation='linear',
     nodes_per_layer=[4]):
 
     '''
@@ -62,6 +63,7 @@ class NNEvo:
         'generations': 10, 
         'selection': 'tour',
         'fitness_goal': 200,
+        'random_children': 1,
         'mx_type': 'default',
         'validation_size': 0,
         'activation': 'linear', 
@@ -89,7 +91,9 @@ class NNEvo:
     self.fitness_goal    = fitness_goal #goal for fitness (episode score) to reach
     self.validation_size = validation_size #number of episodes to run to validate a models success in reaching a fitness goal
     self.nodes_per_layer = nodes_per_layer #list of qty of nodes in each hidden layer
+    self.random_children = random_children #how many children to randomly mutate
     self.num_features    = self.env.observation_space.shape[0]
+
     
     outputs = 1
     if hasattr(env.action_space, 'n'):
@@ -383,8 +387,8 @@ class NNEvo:
       for ind, individual in enumerate(population):
         for i, gene in enumerate(individual):
           mxrt = self.mxrt
-          if self.pop_size > 10:
-            if ind == len(population) - 1: #Randomly initialize last child
+          if self.random_children and mxrt != 1:
+            if ind == len(population) - self.random_children: #Randomly initialize last child
               mxrt = 1
           if random.random() < mxrt:
             individual[i] = random.uniform(-1, 1)
@@ -588,27 +592,27 @@ config = {
   'layers': 0, 
   'env': env, 
   'elitist': 2,
-  'sharpness': 1,
+  'sharpness': 2,
   'cxtype': 'splice',
-  'population': 15, 
+  'population': 16, 
   'mxrt': 'default',
   'transfer': True,
-  'generations': 40, 
+  'generations': 15, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': 10000,
-  'validation_size': 0,
+  'fitness_goal': 6000,
+  'random_children': 2,
+  'validation_size': 2,
   'activation': 'linear', 
   'nodes_per_layer': [], 
 }
 
-agents = NNEvo(**config)
-agents.train()
-agents.show_plot()
-agents.evaluate()
-
-# start = time()
-# train()
-# end = time()
-# print('Time training:', end-start)
-# evaluate()
+try:
+    agents = NNEvo(**config)
+    agents.train('best_model.h5')
+    agents.show_plot()
+    agents.evaluate()
+except:
+    print('\nAborting...')
+    agents.models[agents.best_fit[0]].save_weights('ex_model.h5')
+    print('Best results saved to ex_model.h5')
