@@ -412,7 +412,7 @@ class NNEvo:
     for i in range(self.generations):
       print('\nGeneration:', i+1, '/', self.generations)
       parents = self.selection()
-      if not self.goal_met:
+      if not self.goal_met and i != self.generations-1:
         print('Goal not met. Parents selected.')
         print('Best fit:', self.best_fit)
         children = self.crossover(parents)
@@ -593,17 +593,17 @@ config = {
   'cxrt': .2,
   'layers': 0, 
   'env': env, 
-  'elitist': 2,
+  'elitist': 3,
   'sharpness': 2,
   'cxtype': 'splice',
-  'population': 16, 
-  'mxrt': 0.00002,
+  'population': 20, 
+  'mxrt': 0.001,
   'transfer': True,
   'generations': 20, 
   'mx_type': 'default',
   'selection': 'tour',
   'fitness_goal': 6000,
-  'random_children': 1,
+  'random_children': 2,
   'validation_size': 2,
   'activation': 'linear', 
   'nodes_per_layer': [], 
@@ -612,7 +612,7 @@ config = {
 #train model
 try:
     agents = NNEvo(**config)
-    agents.train('best_model.h5')
+    agents.train('ex_model.h5')
     agents.show_plot()
     agents.evaluate()
 except:
@@ -621,8 +621,8 @@ except:
     print('Best results saved to ex_model.h5')
 
 #test model
-# try:
-#     agents = NNEvo(**config)
-#     agents.evaluate('ex_model.h5')
-# except:
-#     env.close()
+#try:
+#    agents = NNEvo(**config)
+#    agents.evaluate('ex_model.h5')
+#except:
+#    env.close()
