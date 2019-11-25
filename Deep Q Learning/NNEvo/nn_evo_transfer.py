@@ -25,6 +25,7 @@ from   tensorflow.keras.callbacks    import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers       import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
 
+import traceback
 
 class NNEvo:
 
@@ -106,6 +107,8 @@ class NNEvo:
     self.weights_lengths = None
     self.plots = [] #points for matplotlib
     self.episodes = 0
+
+    self.best_results = {}
     
 
   #--- Initialize Population --------------------------------------------------+
@@ -320,6 +323,9 @@ class NNEvo:
             
 
     self.plots.append(self.best_fit)
+    if self.best_fit[1] >= self.best_results.get('fitness', -1000000):
+      self.best_results['fitness'] = self.best_fit[1]
+      self.best_results['genes'] = [gene for gene in self.pop[self.best_fit[0]]]
     return selection
 
   def crossover(self, parents):
@@ -400,7 +406,7 @@ class NNEvo:
   
   #--- Train/Evaluate ---------------------------------------------------------+
 
-  def train(self, filename=None):
+  def train(self, filename=None, target='best_model.h5'):
     self.create_population()
     print('Population created', len(self.pop))
 
@@ -412,9 +418,12 @@ class NNEvo:
     for i in range(self.generations):
       print('\nGeneration:', i+1, '/', self.generations)
       parents = self.selection()
-      if not self.goal_met and i != self.generations-1:
+      if i == self.generations - 1:
+          break
+      if not self.goal_met:
         print('Goal not met. Parents selected.')
         print('Best fit:', self.best_fit)
+        print('Best Results', self.best_results.get('fitness'))
         children = self.crossover(parents)
         print('Breeding done.')
         new_pop = self.mutate(children)
@@ -434,14 +443,11 @@ class NNEvo:
             self.models[i].set_weights(self.deserialize(individual))
       else:
         print(f'Goal met! Episodes: {self.episodes}')
-        self.goal_met.save_weights('best_model.h5')
-        print('Best results saved to best_model.h5')
+        self.goal_met.save_weights(target)
+        print(f'Best results saved to {target}')
         break
     
-    if not self.goal_met:
-      if self.best_fit:
-        self.models[self.best_fit[0]].save_weights('best_model.h5')
-        print('Best results saved to best_model.h5')
+    self.save_best(target=target)
 
 
   def evaluate(self, filename=None, epochs=0):
@@ -512,6 +518,22 @@ class NNEvo:
   #----------------------------------------------------------------------------+
 
   #--- Helper Functions -------------------------------------------------------+
+
+  def save_best(self, target='best_model.h5'):
+    if not self.goal_met:
+      if self.best_results['fitness']:
+        genes = self.best_results['genes']
+        model = self.models[0]
+        if self.transfer:
+          self.models[0] = self.create_transfer_cnn(\
+            ref_model=model, fcn_weights=agents.deserialize(genes)
+          )
+        else:
+          model.set_weights(self.deserialize(genes))
+        model.save_weights(target)
+      elif self.best_fit:
+        self.models[self.best_fit[0]].save_weights(target)
+      print(f'Best results saved to {target}')
 
   def predict(self, model, envstate):
     ''' decide best action for model. '''
@@ -584,45 +606,46 @@ def flatten(L):
 #------------------------------------------------------------------------------+
 
 
-env = gym.make('BattleZone-v0')
+env = gym.make('MountainCar-v0')
 print('Environment created')
 # print(hasattr(env.action_space, 'n'))
 
 config = {
   'tour': 3, 
   'cxrt': .2,
-  'layers': 0, 
+  'layers': 2, 
   'env': env, 
   'elitist': 3,
-  'sharpness': 2,
+  'sharpness': 20,
   'cxtype': 'splice',
-  'population': 20, 
-  'mxrt': 0.001,
-  'transfer': True,
-  'generations': 20, 
+  'population': 35, 
+  'mxrt': 0.00005,
+  'transfer': False,
+  'generations': 50, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': 6000,
+  'fitness_goal': -110,
   'random_children': 2,
-  'validation_size': 2,
+  'validation_size': 10,
   'activation': 'linear', 
-  'nodes_per_layer': [], 
+  'nodes_per_layer': [512,512], 
 }
 
 #train model
 try:
-    agents = NNEvo(**config)
-    agents.train('ex_model.h5')
-    agents.show_plot()
-    agents.evaluate()
+   agents = NNEvo(**config)
+   agents.train(filename='MountainCar.h5', target='MountainCar.h5')
+   agents.show_plot()
+   agents.evaluate()
 except:
-    print('\nAborting...')
-    agents.models[agents.best_fit[0]].save_weights('ex_model.h5')
-    print('Best results saved to ex_model.h5')
+   traceback.print_exc()
+   print('\nAborting...')
+   agents.save_best(target='ex_model.h5')
+   print('Best results saved to ex_model.h5')
 
 #test model
 #try:
 #    agents = NNEvo(**config)
-#    agents.evaluate('ex_model.h5')
+#    agents.evaluate('MountainCar.h5')
 #except:
 #    env.close()
