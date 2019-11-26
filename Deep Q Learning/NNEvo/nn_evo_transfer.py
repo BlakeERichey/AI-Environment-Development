@@ -8,12 +8,11 @@ Implementation of NeuroEvolution Algorithm:
   weights, as an alternative to backpropogation
 '''
 
-import gym, operator
+import gym, operator, time
 import os, datetime, random
 import numpy             as np
 import tensorflow        as tf
 import matplotlib.pyplot as plt
-from   time                          import time
 from   tensorflow.keras.optimizers   import Adam
 from   collections                   import deque
 from   tensorflow.keras              import backend
@@ -25,12 +24,154 @@ from   tensorflow.keras.callbacks    import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers       import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
 
-import traceback
+import traceback, logging
+from multiprocessing import Pool, Process, Queue, Array
+
+#speed up forward propogation
+backend.set_learning_phase(0)
+
+#disable warnings in subprocess
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+logging.disable(logging.WARNING)
+
+def deserialize(genes, shapes, lengths):
+  '''
+    deserializes gene string into weights
+  '''
+
+  weights = []
+  for i, val in enumerate(lengths):
+    if i == 0:
+      begin = 0
+    else:
+      begin = lengths[i-1]
+    weights.append(np.array(genes[begin:val]).reshape(shapes[i]))
+
+  return weights
+
+def multi_quality(
+  res=None, 
+  env=None,
+  layers=1,
+  shapes=(1,),
+  lengths=(1,), 
+  inputs=None,
+  outputs=1,
+  genes=None,
+  index=None,
+  sharpness=1,
+  activation='linear',
+  nodes_per_layer=[128],
+  transfer=False):
+
+  '''
+    implements multiprocessed nn evaluation on a gym environment
+    res: results are indexed into res at `index` 
+  '''
+  genes = [val for val in genes]
+  # print('Inside quality', len(genes), shapes)
+  if not transfer:
+    model = Sequential()
+    model.add(Dense(inputs, input_shape = (inputs,)))
+    
+    for layer in range(layers):
+
+        try:
+            nodes=nodes_per_layer[layer]
+        except IndexError:
+            nodes = None
+
+        if nodes is None:
+            nodes = 128
+
+        model.add(Dense(units = nodes, activation = 'relu'))
+    
+    #output layer
+    model.add(Dense(units = outputs, activation = activation))
+    model.compile(optimizer = Adam(lr=0.001), loss = 'mse', metrics=['accuracy'])
+  elif transfer:
+    model = ResNet50(weights='imagenet', include_top=False, input_shape=(env.observation_space.shape))
+    for layer in model.layers:
+      layer.trainable = False
+    
+    flattened = Flatten()(model.output)
+    #Add FCN
+    for layer in range(layers):
+
+      try:
+          nodes=nodes_per_layer[layer]
+      except IndexError:
+          nodes = None
+
+      if nodes is None:
+          nodes = 128
+
+      if layer == 0:
+        add_layer = Dense(units = nodes, activation = 'relu')(flattened)
+      else:
+        add_layer = Dense(units = nodes, activation = 'relu')(add_layer)
+    
+    if layers:
+      output = Dense(units = outputs, activation = activation)(add_layer)
+    else:
+      output = Dense(units = outputs, activation = activation)(flattened)
+
+    model = Model(model.inputs, output)
+    model.compile(Adam(lr=1e-3), 'mse', metrics=['acc'])
+
+  if transfer:
+    fcn_weights = deserialize(genes, shapes, lengths)
+    assert len(fcn_weights) == len(shapes), \
+      f'Invalid Weight Structure. Expected {len(shapes)}, got {len(fcn_weights)}.'
+    all_weights = model.get_weights()
+    untrainable = all_weights[:-len(shapes)]
+    weights = all_weights[-len(shapes):]
+    for i, matrix in enumerate(weights):
+      matrix[:] = fcn_weights[i]
+  
+    model.set_weights(untrainable + weights)
+  else:
+    weights = deserialize(genes, shapes, lengths)
+    model.set_weights(weights)
+  
+  # print('index', index)
+  # print('genes', genes)
+  # print('weights', weights, '\n\n\n')
+
+  total_rewards = []
+  for epoch in range(sharpness):
+    done = False
+    rewards = []
+    envstate = env.reset()
+    while not done:
+      #adj envstate
+      if transfer:
+        envstate = np.expand_dims(envstate, axis=0)
+      else:
+        envstate = envstate.reshape(1, -1)
+      
+      qvals = model.predict(envstate)[0]
+      if outputs == 1:
+        action = qvals  #continuous action space
+      else:
+        action = np.argmax(qvals) #discrete action space
+
+      envstate, reward, done, info = env.step(action)
+      rewards.append(reward)
+    
+    total_rewards.append(sum(rewards))
+  
+  result = sum(total_rewards)/len(total_rewards)
+  print(f'Model {index} Results: {result}')
+  res[index] = result
+  return result
+
 
 class NNEvo:
 
   def __init__(self, 
-    tour=3, 
+    tour=3,
+    cores=1,
     cxrt=.2,
     layers=1, 
     env=None,
@@ -53,6 +194,7 @@ class NNEvo:
       config = {
         'tour': 3, 
         'cxrt': .2,
+        'cores': 1,
         'layers': 1, 
         'env': None, 
         'elitist': 3,
@@ -72,12 +214,12 @@ class NNEvo:
       }
     '''
 
-    self.default_nodes   = 20
-    self.env             = env
+    self.default_nodes   = 128
     self.mxrt            = mxrt        #chance of a single weight being mutated
     self.cxrt            = cxrt        #chance of parent being selected (crossover rate)
     self.best_fit        = None        #(model, fitness) with best fitness
     self.tour            = tour        #tournament sample size when using tour selection policy
+    self.cores           = cores       #how many cores to run forward propogation on
     self.cxtype          = cxtype      #cross over type (gene splicing or avging)
     self.goal_met        = False       #holds model number that meets fitness goal
     self.num_layers      = layers      #qty of hidden layers
@@ -93,12 +235,16 @@ class NNEvo:
     self.validation_size = validation_size #number of episodes to run to validate a models success in reaching a fitness goal
     self.nodes_per_layer = nodes_per_layer #list of qty of nodes in each hidden layer
     self.random_children = random_children #how many children to randomly mutate
-    self.num_features    = self.env.observation_space.shape[0]
+    
+    #create environments
+    self.envs = [gym.make(env) for _ in range(self.cores)]
+    print('Environments Created:', self.cores)
+    self.num_features = self.envs[0].observation_space.shape[0]
 
     
     outputs = 1
-    if hasattr(env.action_space, 'n'):
-      outputs = self.env.action_space.n
+    if hasattr(self.envs[0].action_space, 'n'):
+      outputs = self.envs[0].action_space.n
     self.num_outputs     = outputs
 
     self.models = [] #list of individuals 
@@ -109,7 +255,6 @@ class NNEvo:
     self.episodes = 0
 
     self.best_results = {}
-    
 
   #--- Initialize Population --------------------------------------------------+
   def create_nn(self):
@@ -163,8 +308,7 @@ class NNEvo:
     '''creates resnet model. will load deserialized weights by passing in weights'''
 
     if not ref_model:
-      self.env.observation_space.shape[0]
-      model = ResNet50(weights='imagenet', include_top=False, input_shape=(self.env.observation_space.shape))
+      model = ResNet50(weights='imagenet', include_top=False, input_shape=(self.envs[0].observation_space.shape))
       for layer in model.layers:
         layer.trainable = False
       
@@ -258,6 +402,8 @@ class NNEvo:
     '''
       fitness function. Returns quality of model
       Runs 1 episode of environment
+
+      arr: subprocess accessible memory for storing results. indexed by model number `i`
     '''
     print(f'Testing model {i}...', end='')
     total_rewards = []
@@ -265,10 +411,10 @@ class NNEvo:
       self.episodes += 1
       done = False
       rewards = []
-      envstate = self.env.reset()
+      envstate = self.envs[0].reset()
       while not done:
         action = self.predict(model, envstate)
-        envstate, reward, done, info = self.env.step(action)
+        envstate, reward, done, info = self.envs[0].step(action)
         rewards.append(reward)
       
       total_rewards.append(sum(rewards))
@@ -307,6 +453,104 @@ class NNEvo:
       print('Ranked:', ranked)
       self.best_fit = ranked[0]
 
+      for i in range(self.elitist):
+        selection.append(ranked[i])
+
+      if self.selection_type == 'tour':
+        while len(selection) < self.pop_size:
+          tourny = random.sample(ranked, self.tour)
+          selection.append(max(tourny, key=lambda x:x[1]))
+
+      elif self.selection_type == 'cxrt':
+        while len(selection) < self.pop_size:
+          for model in random.sample(ranked, len(ranked)):
+            if random.random() < self.cxrt:
+              selection.append(model)
+            
+
+    self.plots.append(self.best_fit)
+    if self.best_fit[1] >= self.best_results.get('fitness', -1000000):
+      self.best_results['fitness'] = self.best_fit[1]
+      self.best_results['genes'] = [gene for gene in self.pop[self.best_fit[0]]]
+    return selection
+
+  def selection_mp(self):
+    '''
+      runs processes in parallel
+      generate mating pool, tournament && elistist selection policy
+    '''
+    selection = []
+
+    #create gene dependencies
+    all_genes = []
+    for i in range(len(self.pop)):
+      genes = Array('f', range(len(self.pop[i])))
+      for j in range(len(self.pop[i])):
+        genes[j] = self.pop[i][j]
+      all_genes.append(genes)
+
+    fitnesses = Array('f', range(self.pop_size))
+    processed = 0
+    while processed < self.pop_size:
+      processes = []
+      for core in range(min(self.cores, self.pop_size - processed)):
+        i = len(processes) + processed
+
+        genes = all_genes[i]
+        
+        nodes_per_layer = Array('f', range(len(self.nodes_per_layer)))
+        for j in range(len(self.nodes_per_layer)):
+          nodes_per_layer[j] = self.nodes_per_layer[j]
+        
+        obj = {
+          'index':      i,
+          'genes':      genes,
+          'res':        fitnesses, 
+          'env':        self.envs[core], 
+          'layers':     self.num_layers,
+          'transfer':   self.transfer,
+          'outputs':    self.num_outputs,
+          'inputs':     self.num_features,
+          'sharpness':  self.sharpness,
+          'shapes':     self.weight_shapes,
+          'activation': self.activation,
+          'lengths':    self.weights_lengths,
+          'nodes_per_layer': nodes_per_layer,
+        }
+
+        # print('Restructred Genes', obj['index'], [val for val in genes], '\n\n\n')
+        p = Process(target=multi_quality, kwargs=obj)
+        processes.append(p)
+        p.start()
+      
+      for p in processes:
+        p.join()
+      episodes = min(self.cores, self.pop_size - processed)
+      processed += episodes
+      self.episodes += episodes
+
+    ranked = [] #ranked models, best to worst
+    results = [val for val in fitnesses]
+    for i, fitness in enumerate(results):
+      ranked.append((i, fitness))
+
+    ranked = sorted(ranked, key=operator.itemgetter(1), reverse=True)
+    print('Ranked:', ranked)
+    self.best_fit = ranked[0]
+    
+
+    if self.fitness_goal is not None and self.best_fit[1] >= self.fitness_goal:
+      #goal met? If so, early stop
+      i = self.best_fit[0] #model number
+      if self.validation_size:
+        valid = self.validate(self.models[i])
+      else:
+        valid = True
+      
+      if valid:
+        self.goal_met = self.models[i] #save model that met goal
+
+    if not self.goal_met:  #if goal met prepare to terminate
       for i in range(self.elitist):
         selection.append(ranked[i])
 
@@ -417,7 +661,11 @@ class NNEvo:
 
     for i in range(self.generations):
       print('\nGeneration:', i+1, '/', self.generations)
-      parents = self.selection()
+      if self.cores > 1:
+        parents = self.selection_mp()
+      else:
+        parents = self.selection()
+
       if i == self.generations - 1:
           break
       if not self.goal_met:
@@ -469,12 +717,12 @@ class NNEvo:
       while (True, epoch<epochs)[epochs>0]:
         done = False
         rewards = []
-        envstate = self.env.reset()
+        envstate = self.envs[0].reset()
         while not done:
           action = self.predict(model, envstate)
-          envstate, reward, done, info = self.env.step(action)
+          envstate, reward, done, info = self.envs[0].step(action)
           if not epochs:
-            self.env.render()
+            self.envs[0].render()
           rewards.append(reward)
 
         print('Reward:', sum(rewards))
@@ -494,10 +742,10 @@ class NNEvo:
     for epoch in range(n_epochs):
       done = False
       rewards = []
-      envstate = self.env.reset()
+      envstate = self.envs[0].reset()
       while not done:
         action = self.predict(model, envstate)
-        envstate, reward, done, info = self.env.step(action)
+        envstate, reward, done, info = self.envs[0].step(action)
         rewards.append(reward)
 
       total_rewards.append(sum(rewards))
@@ -606,46 +854,48 @@ def flatten(L):
 #------------------------------------------------------------------------------+
 
 
-env = gym.make('MountainCar-v0')
-print('Environment created')
+# env = gym.make('MountainCar-v0')
+# print('Environment created')
 # print(hasattr(env.action_space, 'n'))
 
 config = {
-  'tour': 3, 
+  'tour': 3,
+  'cores': 1,
   'cxrt': .2,
-  'layers': 2, 
-  'env': env, 
-  'elitist': 3,
-  'sharpness': 20,
+  'layers': 1, 
+  'env': 'CartPole-v0', 
+  'elitist': 2,
+  'sharpness': 10,
   'cxtype': 'splice',
-  'population': 35, 
-  'mxrt': 0.00005,
+  'population': 25, 
+  'mxrt': 1e-8,
   'transfer': False,
   'generations': 50, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': -110,
-  'random_children': 2,
+  'fitness_goal': 200,
+  'random_children': 1,
   'validation_size': 10,
   'activation': 'linear', 
-  'nodes_per_layer': [512,512], 
+  'nodes_per_layer': [32], 
 }
 
-#train model
-try:
-   agents = NNEvo(**config)
-   agents.train(filename='MountainCar.h5', target='MountainCar.h5')
-   agents.show_plot()
-   agents.evaluate()
-except:
-   traceback.print_exc()
-   print('\nAborting...')
-   agents.save_best(target='ex_model.h5')
-   print('Best results saved to ex_model.h5')
+if __name__ == '__main__':
+  #train model
+  try:
+    agents = NNEvo(**config)
+    agents.train(target='CartPole.h5')
+    agents.show_plot()
+    agents.evaluate()
+  except:
+    traceback.print_exc()
+    print('\nAborting...')
+    agents.save_best(target='ex_model.h5')
+    print('Best results saved to ex_model.h5')
 
-#test model
-#try:
-#    agents = NNEvo(**config)
-#    agents.evaluate('MountainCar.h5')
-#except:
-#    env.close()
+  #test model
+  #try:
+  #    agents = NNEvo(**config)
+  #    agents.evaluate('MountainCar.h5')
+  #except:
+  #    env.close()
