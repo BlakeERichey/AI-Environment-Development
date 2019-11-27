@@ -173,7 +173,7 @@ def multi_quality(
   res[index] = result
 
   # spontaneous saving
-  if index == 0 or result > 3000:
+  if index == 0:
     print(f'Saving model {index}...')
     model.save_weights('BattleZoneTemp.h5')
     print('Model saved')
