@@ -68,13 +68,36 @@ def multi_quality(
     implements multiprocessed nn evaluation on a gym environment
     res: results are indexed into res at `index` 
   '''
-  genes = [val for val in genes]
-  # print('Inside quality', len(genes), shapes)
-  if not transfer:
-    model = Sequential()
-    model.add(Dense(inputs, input_shape = (inputs,)))
-    
-    for layer in range(layers):
+  try:
+    genes = [val for val in genes]
+    # print('Inside quality', len(genes), shapes)
+    if not transfer:
+      model = Sequential()
+      model.add(Dense(inputs, input_shape = (inputs,)))
+      
+      for layer in range(layers):
+
+          try:
+              nodes=nodes_per_layer[layer]
+          except IndexError:
+              nodes = None
+
+          if nodes is None:
+              nodes = 128
+
+          model.add(Dense(units = nodes, activation = 'relu'))
+      
+      #output layer
+      model.add(Dense(units = outputs, activation = activation))
+      model.compile(optimizer = Adam(lr=0.001), loss = 'mse', metrics=['accuracy'])
+    elif transfer:
+      model = ResNet50(weights='imagenet', include_top=False, input_shape=(env.observation_space.shape))
+      for layer in model.layers:
+        layer.trainable = False
+      
+      flattened = Flatten()(model.output)
+      #Add FCN
+      for layer in range(layers):
 
         try:
             nodes=nodes_per_layer[layer]
@@ -84,86 +107,76 @@ def multi_quality(
         if nodes is None:
             nodes = 128
 
-        model.add(Dense(units = nodes, activation = 'relu'))
-    
-    #output layer
-    model.add(Dense(units = outputs, activation = activation))
-    model.compile(optimizer = Adam(lr=0.001), loss = 'mse', metrics=['accuracy'])
-  elif transfer:
-    model = ResNet50(weights='imagenet', include_top=False, input_shape=(env.observation_space.shape))
-    for layer in model.layers:
-      layer.trainable = False
-    
-    flattened = Flatten()(model.output)
-    #Add FCN
-    for layer in range(layers):
-
-      try:
-          nodes=nodes_per_layer[layer]
-      except IndexError:
-          nodes = None
-
-      if nodes is None:
-          nodes = 128
-
-      if layer == 0:
-        add_layer = Dense(units = nodes, activation = 'relu')(flattened)
-      else:
-        add_layer = Dense(units = nodes, activation = 'relu')(add_layer)
-    
-    if layers:
-      output = Dense(units = outputs, activation = activation)(add_layer)
-    else:
-      output = Dense(units = outputs, activation = activation)(flattened)
-
-    model = Model(model.inputs, output)
-    model.compile(Adam(lr=1e-3), 'mse', metrics=['acc'])
-
-  if transfer:
-    fcn_weights = deserialize(genes, shapes, lengths)
-    assert len(fcn_weights) == len(shapes), \
-      f'Invalid Weight Structure. Expected {len(shapes)}, got {len(fcn_weights)}.'
-    all_weights = model.get_weights()
-    untrainable = all_weights[:-len(shapes)]
-    weights = all_weights[-len(shapes):]
-    for i, matrix in enumerate(weights):
-      matrix[:] = fcn_weights[i]
-  
-    model.set_weights(untrainable + weights)
-  else:
-    weights = deserialize(genes, shapes, lengths)
-    model.set_weights(weights)
-  
-  # print('index', index)
-  # print('genes', genes)
-  # print('weights', weights, '\n\n\n')
-
-  total_rewards = []
-  for epoch in range(sharpness):
-    done = False
-    rewards = []
-    envstate = env.reset()
-    while not done:
-      #adj envstate
-      if transfer:
-        envstate = np.expand_dims(envstate, axis=0)
-      else:
-        envstate = envstate.reshape(1, -1)
+        if layer == 0:
+          add_layer = Dense(units = nodes, activation = 'relu')(flattened)
+        else:
+          add_layer = Dense(units = nodes, activation = 'relu')(add_layer)
       
-      qvals = model.predict(envstate)[0]
-      if outputs == 1:
-        action = qvals  #continuous action space
+      if layers:
+        output = Dense(units = outputs, activation = activation)(add_layer)
       else:
-        action = np.argmax(qvals) #discrete action space
+        output = Dense(units = outputs, activation = activation)(flattened)
 
-      envstate, reward, done, info = env.step(action)
-      rewards.append(reward)
+      model = Model(model.inputs, output)
+      model.compile(Adam(lr=1e-3), 'mse', metrics=['acc'])
+
+    if transfer:
+      fcn_weights = deserialize(genes, shapes, lengths)
+      assert len(fcn_weights) == len(shapes), \
+        f'Invalid Weight Structure. Expected {len(shapes)}, got {len(fcn_weights)}.'
+      all_weights = model.get_weights()
+      untrainable = all_weights[:-len(shapes)]
+      weights = all_weights[-len(shapes):]
+      for i, matrix in enumerate(weights):
+        matrix[:] = fcn_weights[i]
     
-    total_rewards.append(sum(rewards))
-  
-  result = sum(total_rewards)/len(total_rewards)
+      model.set_weights(untrainable + weights)
+    else:
+      weights = deserialize(genes, shapes, lengths)
+      model.set_weights(weights)
+    
+    # print('index', index)
+    # print('genes', genes)
+    # print('weights', weights, '\n\n\n')
+
+    total_rewards = []
+    for epoch in range(sharpness):
+      done = False
+      rewards = []
+      envstate = env.reset()
+      while not done:
+        #adj envstate
+        if transfer:
+          envstate = np.expand_dims(envstate, axis=0)
+        else:
+          envstate = envstate.reshape(1, -1)
+        
+        qvals = model.predict(envstate)[0]
+        if outputs == 1:
+          action = qvals  #continuous action space
+        else:
+          action = np.argmax(qvals) #discrete action space
+
+        envstate, reward, done, info = env.step(action)
+        rewards.append(reward)
+      
+      total_rewards.append(sum(rewards))
+    
+    if 5 >= sharpness >= 1:
+      result = max(total_rewards)
+    else:
+      result = sum(total_rewards)/len(total_rewards)
+  except:
+    print('Exception Occured in Process!')
+    result = -1000000
   print(f'Model {index} Results: {result}')
   res[index] = result
+
+  ##spontaneous saving
+  # if index == 0:
+  #   print(f'Saving model {index}...')
+  #   model.save_weights('MountainCar.h5')
+  #   print('Model saved')
   return result
 
 
@@ -419,7 +432,10 @@ class NNEvo:
       
       total_rewards.append(sum(rewards))
     
-    result = sum(total_rewards)/len(total_rewards)
+    if 5 >= self.sharpness >= 1:
+      result = max(total_rewards)
+    else:
+      result = sum(total_rewards)/len(total_rewards)
     print(result)
     return result
   
@@ -525,7 +541,7 @@ class NNEvo:
       
       for p in processes:
         p.join()
-      episodes = min(self.cores, self.pop_size - processed)
+      episodes = min(self.cores, self.pop_size - processed)*self.sharpness
       processed += episodes
       self.episodes += episodes
 
@@ -538,17 +554,19 @@ class NNEvo:
     print('Ranked:', ranked)
     self.best_fit = ranked[0]
     
-
-    if self.fitness_goal is not None and self.best_fit[1] >= self.fitness_goal:
-      #goal met? If so, early stop
-      i = self.best_fit[0] #model number
-      if self.validation_size:
-        valid = self.validate(self.models[i])
-      else:
-        valid = True
-      
-      if valid:
-        self.goal_met = self.models[i] #save model that met goal
+    for model in ranked: #model = (i, fitness)
+      if self.fitness_goal is not None and model[1] >= self.fitness_goal:
+        #goal met? If so, early stop
+        i = model[0] #model number
+        if self.validation_size:
+          valid = self.validate(self.models[i])
+        else:
+          valid = True
+        
+        if valid:
+          self.goal_met = self.models[i] #save model that met goal
+          self.best_fit = model
+          break
 
     if not self.goal_met:  #if goal met prepare to terminate
       for i in range(self.elitist):
@@ -567,7 +585,7 @@ class NNEvo:
             
 
     self.plots.append(self.best_fit)
-    if self.best_fit[1] >= self.best_results.get('fitness', -1000000):
+    if self.best_fit[1] >= self.best_results.get('fitness', -1000000) or self.goal_met:
       self.best_results['fitness'] = self.best_fit[1]
       self.best_results['genes'] = [gene for gene in self.pop[self.best_fit[0]]]
     return selection
@@ -853,38 +871,33 @@ def flatten(L):
   return flat
 #------------------------------------------------------------------------------+
 
-
-# env = gym.make('MountainCar-v0')
-# print('Environment created')
-# print(hasattr(env.action_space, 'n'))
-
 config = {
-  'tour': 3,
+  'tour': 4,
   'cores': 1,
   'cxrt': .2,
-  'layers': 1, 
-  'env': 'CartPole-v0', 
-  'elitist': 2,
-  'sharpness': 10,
+  'layers': 3, 
+  'env': 'MountainCar-v0', 
+  'elitist': 3,
+  'sharpness': 3,
   'cxtype': 'splice',
-  'population': 25, 
-  'mxrt': 1e-8,
+  'population': 42, 
+  'mxrt': 0.0001,
   'transfer': False,
   'generations': 50, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': 200,
-  'random_children': 1,
+  'fitness_goal': -110,
+  'random_children': 2,
   'validation_size': 10,
-  'activation': 'linear', 
-  'nodes_per_layer': [32], 
+  'activation': 'softmax', 
+  'nodes_per_layer': [256,512,256], 
 }
 
 if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(target='CartPole.h5')
+    agents.train(filename='MountainCar.h5', target='MountainCar.h5')
     agents.show_plot()
     agents.evaluate()
   except:
@@ -893,9 +906,10 @@ if __name__ == '__main__':
     agents.save_best(target='ex_model.h5')
     print('Best results saved to ex_model.h5')
 
-  #test model
-  #try:
-  #    agents = NNEvo(**config)
-  #    agents.evaluate('MountainCar.h5')
-  #except:
-  #    env.close()
+#  test model
+  # try:
+  #     agents = NNEvo(**config)
+  #     agents.evaluate('MountainCar.h5')
+  # except:
+  #     traceback.print_exc()
+  #     agents.envs[0].close()
