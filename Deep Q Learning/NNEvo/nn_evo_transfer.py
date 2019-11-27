@@ -70,7 +70,7 @@ def multi_quality(
   '''
   try:
     genes = [val for val in genes]
-    # print('Inside quality', len(genes), shapes)
+    print(f'Testig model {index}')
     if not transfer:
       model = Sequential()
       model.add(Dense(inputs, input_shape = (inputs,)))
@@ -172,10 +172,10 @@ def multi_quality(
   print(f'Model {index} Results: {result}')
   res[index] = result
 
-  ##spontaneous saving
+  ## spontaneous saving
   # if index == 0:
   #   print(f'Saving model {index}...')
-  #   model.save_weights('MountainCar.h5')
+  #   model.save_weights('BattleZone.h5')
   #   print('Model saved')
   return result
 
@@ -541,9 +541,9 @@ class NNEvo:
       
       for p in processes:
         p.join()
-      episodes = min(self.cores, self.pop_size - processed)*self.sharpness
+      episodes = min(self.cores, self.pop_size - processed)
       processed += episodes
-      self.episodes += episodes
+      self.episodes += episodes * self.sharpness
 
     ranked = [] #ranked models, best to worst
     results = [val for val in fitnesses]
@@ -872,32 +872,32 @@ def flatten(L):
 #------------------------------------------------------------------------------+
 
 config = {
-  'tour': 4,
-  'cores': 1,
+  'tour': 3,
+  'cores': 3,
   'cxrt': .2,
-  'layers': 3, 
-  'env': 'MountainCar-v0', 
+  'layers': 0, 
+  'env': 'BattleZone-v0', 
   'elitist': 3,
-  'sharpness': 3,
+  'sharpness': 2,
   'cxtype': 'splice',
-  'population': 42, 
-  'mxrt': 0.0001,
-  'transfer': False,
-  'generations': 50, 
+  'population': 18, 
+  'mxrt': 0.00001,
+  'transfer': True,
+  'generations': 30, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': -110,
-  'random_children': 2,
-  'validation_size': 10,
-  'activation': 'softmax', 
-  'nodes_per_layer': [256,512,256], 
+  'fitness_goal': 6000,
+  'random_children': 1,
+  'validation_size': 0,
+  'activation': 'linear', 
+  'nodes_per_layer': [], 
 }
 
 if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(filename='MountainCar.h5', target='MountainCar.h5')
+    agents.train(target='BattleZone.h5')
     agents.show_plot()
     agents.evaluate()
   except:
