@@ -166,14 +166,14 @@ def multi_quality(
       result = max(total_rewards)
     else:
       result = sum(total_rewards)/len(total_rewards)
-  except:
-    print('Exception Occured in Process!')
+  except Exception as e:
+    print('Exception Occured in Process!', e)
     result = -1000000
   print(f'Model {index} Results: {result}')
   res[index] = result
 
   # spontaneous saving
-  if index == 0 or result > 3000:
+  if result > 15000:
     print(f'Saving model {index}...')
     model.save_weights('BattleZoneTemp.h5')
     print('Model saved')
@@ -685,6 +685,9 @@ class NNEvo:
       self.pop[0] = self.serialize(self.models[0])
       print('Model loaded from', filename)
 
+    self.start_time = datetime.datetime.now()
+    print(f'Starting at: {self.start_time}')
+
     for i in range(self.generations):
       print('\nGeneration:', i+1, '/', self.generations)
       if self.cores > 1:
@@ -714,12 +717,15 @@ class NNEvo:
             )
         else: 
           for i, individual in enumerate(new_pop):
-            self.models[i].set_weights(self.deserialize(individual))
+            self.models[i].set_weights(self.deserialize(individual))   
       else:
         print(f'Goal met! Episodes: {self.episodes}')
         self.goal_met.save_weights(target)
         print(f'Best results saved to {target}')
         break
+      
+      dt = datetime.datetime.now() - self.start_time
+      print('Time Running: ', format_time(dt.total_seconds()))
     
     self.save_best(target=target)
 
@@ -877,6 +883,18 @@ def flatten(L):
     flat += l
   
   return flat
+
+# This is a small utility for printing readable time strings:
+def format_time(seconds):
+    if seconds < 400:
+        s = float(seconds)
+        return "%.1f seconds" % (s,)
+    elif seconds < 4000:
+        m = seconds / 60.0
+        return "%.2f minutes" % (m,)
+    else:
+        h = seconds / 3600.0
+        return "%.2f hours" % (h,)
 #------------------------------------------------------------------------------+
 
 config = {
@@ -885,19 +903,19 @@ config = {
   'cxrt': .2,
   'layers': 0, 
   'env': 'BattleZone-v0', 
-  'elitist': 3,
+  'elitist': 4,
   'sharpness': 1,
   'cxtype': 'splice',
   'population': 21, 
-  'mxrt': 0.00001,
+  'mxrt': 0.0005,
   'transfer': True,
   'generations': 80, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': 6000,
+  'fitness_goal': 22000,
   'random_children': 1,
   'validation_size': 2,
-  'activation': 'linear', 
+  'activation': 'softmax', 
   'nodes_per_layer': [], 
 }
 
