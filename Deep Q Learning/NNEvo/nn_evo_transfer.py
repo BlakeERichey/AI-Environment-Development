@@ -173,7 +173,7 @@ def multi_quality(
   res[index] = result
 
   # spontaneous saving
-  if result > 15000:
+  if result > 20000:
     print(f'Saving model {index}...')
     model.save_weights('BattleZoneTemp.h5')
     print('Model saved')
@@ -662,7 +662,7 @@ class NNEvo:
 
     else:   
       for ind, individual in enumerate(population):
-        if ind >= self.elitist: #ignore elites
+        #if ind >= self.elitist: #ignore elites
           for i, gene in enumerate(individual):
             mxrt = self.mxrt
             if self.random_children and mxrt != 1:
@@ -898,7 +898,7 @@ def format_time(seconds):
 #------------------------------------------------------------------------------+
 
 config = {
-  'tour': 3,
+  'tour': 4,
   'cores': 3,
   'cxrt': .2,
   'layers': 0, 
@@ -906,15 +906,15 @@ config = {
   'elitist': 4,
   'sharpness': 1,
   'cxtype': 'splice',
-  'population': 21, 
-  'mxrt': 0.0005,
+  'population': 40, 
+  'mxrt': 'default',
   'transfer': True,
-  'generations': 80, 
+  'generations': 100, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': 22000,
+  'fitness_goal': None,
   'random_children': 1,
-  'validation_size': 2,
+  'validation_size': 0,
   'activation': 'softmax', 
   'nodes_per_layer': [], 
 }
