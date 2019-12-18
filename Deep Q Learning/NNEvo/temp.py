@@ -175,7 +175,7 @@ def multi_quality(
   # spontaneous saving
   if result > 20000:
     print(f'Saving model {index}...')
-    model.save_weights('BattleZoneTemp.h5')
+    model.save_weights(f'BattleZone_{result}.h5')
     print('Model saved')
   return result
 
@@ -657,38 +657,42 @@ class NNEvo:
   def mutate(self, population):
     if self.mx_type!='default':
       '''randomize layers, VERY INEFFICIENT'''
-      mutated = False
       for ind, individual in enumerate(population):
-        model = self.load_weights(individual)
-        session = backend.get_session()
-        for layer in model.layers:
-          if random.random() < self.mxrt:
-            if not mutated:
-              mutated = True
-            for v in layer.__dict__:
-              v_arg = getattr(layer,v)
-              if hasattr(v_arg,'initializer'):
-                initializer_method = getattr(v_arg, 'initializer')
-                initializer_method.run(session=session)
+        mutated = False
+        if ind >= len(population) - self.random_children: #Randomly initialize last child
+          model = reinitLayers(self.models[0])
+          mutated = True
+        else:
+          model = self.load_weights(individual)
+          session = backend.get_session()
+          for layer in model.layers:
+            if layer.trainable:
+              if random.random() < self.mxrt:
+                if not mutated:
+                  mutated = True
+                for v in layer.__dict__:
+                  v_arg = getattr(layer,v)
+                  if hasattr(v_arg,'initializer'):
+                    initializer_method = getattr(v_arg, 'initializer')
+                    initializer_method.run(session=session)
         if mutated:
           weights = self.serialize(model)
           for i, gene in enumerate(individual):
             individual[i] = weights[i]
 
     else:
+      mxrt = self.mxrt
       ref_genes = self.serialize(reinitLayers(self.models[0]))
       for ind, individual in enumerate(population):
         #if ind >= self.elitist: #ignore elites
+          if self.random_children and mxrt != 1:
+            if ind >= len(population) - self.random_children: #Randomly initialize last child
+              mxrt = 1
+          if mxrt == 1: #for random children
+            ref_genes = self.serialize(reinitLayers(self.models[0]))
           for i, gene in enumerate(individual):
-            mxrt = self.mxrt
-            if self.random_children and mxrt != 1:
-              if ind == len(population) - self.random_children: #Randomly initialize last child
-                mxrt = 1
-            if mxrt == 1: #for random children
-              ref_genes = self.serialize(reinitLayers(self.models[0]))
-            if random.random() < mxrt:
+            if mxrt == 1 or random.random() < mxrt:
               individual[i] = ref_genes[i]
-    
     return population
   #----------------------------------------------------------------------------+
   
@@ -952,7 +956,7 @@ if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(target='CartPole2.h5')
+    agents.train(target='BattleZone2.h5')
     agents.show_plot()
     agents.evaluate()
   except:
