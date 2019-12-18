@@ -8,7 +8,7 @@ Implementation of NeuroEvolution Algorithm:
   weights, as an alternative to backpropogation
 '''
 
-import gym, operator, time
+import gym, operator, time, math
 import os, datetime, random
 import numpy             as np
 import tensorflow        as tf
@@ -19,7 +19,7 @@ from   tensorflow.keras              import backend
 from   sklearn.model_selection       import train_test_split
 from   tensorflow.keras.applications import ResNet50
 from   tensorflow.python.client      import device_lib
-from   tensorflow.keras.models       import Sequential, Model
+from   tensorflow.keras.models       import Sequential, Model, clone_model
 from   tensorflow.keras.callbacks    import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers       import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
@@ -162,18 +162,18 @@ def multi_quality(
       
       total_rewards.append(sum(rewards))
     
-    if 5 >= sharpness >= 1:
-      result = max(total_rewards)
-    else:
-      result = sum(total_rewards)/len(total_rewards)
-  except:
-    print('Exception Occured in Process!')
+    # if 5 >= sharpness >= 1:
+    #   result = max(total_rewards)
+    # else:
+    result = sum(total_rewards)/len(total_rewards)
+  except Exception as e:
+    print('Exception Occured in Process!', e)
     result = -1000000
   print(f'Model {index} Results: {result}')
   res[index] = result
 
   # spontaneous saving
-  if index == 0:
+  if result > 20000:
     print(f'Saving model {index}...')
     model.save_weights('BattleZoneTemp.h5')
     print('Model saved')
@@ -309,7 +309,8 @@ class NNEvo:
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt == 'default':
-        self.mxrt = 1/( self.weights_lengths[-1] * 1.8 )
+        self.mxrt = math.log(self.weights_lengths[-1], 2)/(self.weights_lengths[-1])
+      print('Weight Shapes:', self.weight_shapes)
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
       print('Crossover Type:', self.cxtype)
@@ -387,7 +388,7 @@ class NNEvo:
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt == 'default':
-        self.mxrt = 1/( self.weights_lengths[-1] * 1.8 )
+        self.mxrt = math.log(self.weights_lengths[-1], 10)/(self.weights_lengths[-1])
       print('Weight Shapes:', self.weight_shapes)
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
@@ -398,27 +399,32 @@ class NNEvo:
     return model
   
   def create_population(self):
+    if self.transfer:
+      model = self.create_transfer_cnn()
+    else:
+      model = self.create_nn()
+    self.models.append(model)
+    model_genes = self.serialize(model)
     for i in range(self.pop_size):
-      if self.transfer:
-        model = self.create_transfer_cnn()
-      else:
-        model = self.create_nn()
-      self.models.append(model)
-      self.pop.append(self.serialize(model))
-
-      print('Model', i+1, 'created.')
+      new_ind = reinitLayers(model)
+      self.pop.append(self.serialize(new_ind))
+      print('Model', i, 'created.')
+    
+    print('Correctly generated:', not(False in [len(model_genes) == len(self.pop[i]) for i in range(self.pop_size)]))
   #----------------------------------------------------------------------------+
 
   #--- Fitness Calculation ----------------------------------------------------+
 
-  def quality(self, model, i):
+  def quality(self, genes, i):
     '''
       fitness function. Returns quality of model
-      Runs 1 episode of environment
-
-      arr: subprocess accessible memory for storing results. indexed by model number `i`
+      Runs average of self.sharpness episodes of environment
     '''
     print(f'Testing model {i}...', end='')
+    #load weights
+    model = self.load_weights(genes)
+    
+    #Test model
     total_rewards = []
     for epoch in range(self.sharpness):
       self.episodes += 1
@@ -432,10 +438,10 @@ class NNEvo:
       
       total_rewards.append(sum(rewards))
     
-    if 5 >= self.sharpness >= 1:
-      result = max(total_rewards)
-    else:
-      result = sum(total_rewards)/len(total_rewards)
+    # if 5 >= self.sharpness >= 1:
+    #   result = max(total_rewards)
+    # else:
+    result = sum(total_rewards)/len(total_rewards)
     print(result)
     return result
   
@@ -449,18 +455,18 @@ class NNEvo:
     selection = []
 
     ranked = [] #ranked models, best to worst
-    for i, model in enumerate(self.models):
-      fitness = self.quality(model, i)
+    for i, genes in enumerate(self.pop):
+      fitness = self.quality(genes, i)
       ranked.append((i, fitness))
       if self.fitness_goal is not None and fitness >= self.fitness_goal:
         #goal met? If so, early stop
         if self.validation_size:
-          valid = self.validate(self.models[i])
+          valid = self.validate(self.models[0])
         else:
           valid = True
         
         if valid:
-          self.goal_met = self.models[i] #save model that met goal
+          self.goal_met = self.models[0] #save model that met goal
           self.best_fit = (i, fitness)
           break
 
@@ -567,12 +573,12 @@ class NNEvo:
         #goal met? If so, early stop
         i = model[0] #model number
         if self.validation_size:
-          valid = self.validate(self.models[i])
+          valid = self.validate(self.load_weights(self.pop[i]))
         else:
           valid = True
         
         if valid:
-          self.goal_met = self.models[i] #save model that met goal
+          self.goal_met = self.models[0] #save model that met goal
           self.best_fit = model
           break
 
@@ -650,26 +656,38 @@ class NNEvo:
   
   def mutate(self, population):
     if self.mx_type!='default':
-      '''randomize layers'''
-      begin = 0
+      '''randomize layers, VERY INEFFICIENT'''
+      mutated = False
       for ind, individual in enumerate(population):
-        if ind >= self.elitist:
-          for i, val in enumerate(self.weights_lengths):
-            if random.random() < self.mxrt:
-              for gene in range(begin, val):
-                individual[gene] = random.uniform(-1, 1)
-            begin=val
+        model = self.load_weights(individual)
+        session = backend.get_session()
+        for layer in model.layers:
+          if random.random() < self.mxrt:
+            if not mutated:
+              mutated = True
+            for v in layer.__dict__:
+              v_arg = getattr(layer,v)
+              if hasattr(v_arg,'initializer'):
+                initializer_method = getattr(v_arg, 'initializer')
+                initializer_method.run(session=session)
+        if mutated:
+          weights = self.serialize(model)
+          for i, gene in enumerate(individual):
+            individual[i] = weights[i]
 
-    else:   
+    else:
+      ref_genes = self.serialize(reinitLayers(self.models[0]))
       for ind, individual in enumerate(population):
-        if ind >= self.elitist: #ignore elites
+        #if ind >= self.elitist: #ignore elites
           for i, gene in enumerate(individual):
             mxrt = self.mxrt
             if self.random_children and mxrt != 1:
               if ind == len(population) - self.random_children: #Randomly initialize last child
                 mxrt = 1
+            if mxrt == 1: #for random children
+              ref_genes = self.serialize(reinitLayers(self.models[0]))
             if random.random() < mxrt:
-              individual[i] = random.uniform(-1, 1)
+              individual[i] = ref_genes[i]
     
     return population
   #----------------------------------------------------------------------------+
@@ -685,6 +703,9 @@ class NNEvo:
       self.pop[0] = self.serialize(self.models[0])
       print('Model loaded from', filename)
 
+    self.start_time = datetime.datetime.now()
+    print(f'Starting at: {self.start_time}')
+
     for i in range(self.generations):
       print('\nGeneration:', i+1, '/', self.generations)
       if self.cores > 1:
@@ -692,7 +713,7 @@ class NNEvo:
       else:
         parents = self.selection()
 
-      if i == self.generations - 1:
+      if i == self.generations - 1: #dont perform mutatations on last gen
           break
       if not self.goal_met:
         print('Goal not met. Parents selected.')
@@ -706,20 +727,17 @@ class NNEvo:
         print('New pop:', len(new_pop))
         self.pop = new_pop
         #create new pop
-        if self.transfer:
-          for i, individual in enumerate(new_pop):
-            model = self.models[i]
-            self.models[i] = self.create_transfer_cnn(\
-              ref_model=model, fcn_weights=agents.deserialize(individual)
-            )
-        else: 
-          for i, individual in enumerate(new_pop):
-            self.models[i].set_weights(self.deserialize(individual))
       else:
         print(f'Goal met! Episodes: {self.episodes}')
         self.goal_met.save_weights(target)
         print(f'Best results saved to {target}')
         break
+      
+      dt = datetime.datetime.now() - self.start_time
+      print('Time Running: ', format_time(dt.total_seconds()))
+    
+    dt = datetime.datetime.now() - self.start_time
+    print('Time Running: ', format_time(dt.total_seconds()))
     
     self.save_best(target=target)
 
@@ -797,16 +815,10 @@ class NNEvo:
     if not self.goal_met:
       if self.best_results['fitness']:
         genes = self.best_results['genes']
-        model = self.models[0]
-        if self.transfer:
-          self.models[0] = self.create_transfer_cnn(\
-            ref_model=model, fcn_weights=agents.deserialize(genes)
-          )
-        else:
-          model.set_weights(self.deserialize(genes))
-        model.save_weights(target)
       elif self.best_fit:
-        self.models[self.best_fit[0]].save_weights(target)
+        genes = self.pop[self.best_fit[0]]
+      model = self.load_weights(genes)
+      model.save_weights(target)
       print(f'Best results saved to {target}')
 
   def predict(self, model, envstate):
@@ -856,6 +868,17 @@ class NNEvo:
     
     return weights
 
+  def load_weights(self, genes):
+    if self.transfer:
+      model = self.models[0]
+      self.models[0] = self.create_transfer_cnn(\
+        ref_model=model, fcn_weights=self.deserialize(genes)
+      )
+    else: 
+        self.models[0].set_weights(self.deserialize(genes))
+    
+    return self.models[0]
+
 def splice_list(list1, list2, index1, index2):
   '''
     combined list1 and list2 taking splice from list1 with starting index `index1`
@@ -877,6 +900,30 @@ def flatten(L):
     flat += l
   
   return flat
+
+# This is a small utility for printing readable time strings:
+def format_time(seconds):
+    if seconds < 400:
+        s = float(seconds)
+        return "%.1f seconds" % (s,)
+    elif seconds < 4000:
+        m = seconds / 60.0
+        return "%.2f minutes" % (m,)
+    else:
+        h = seconds / 3600.0
+        return "%.2f hours" % (h,)
+
+def reinitLayers(model):
+  session = backend.get_session()
+  for layer in model.layers:
+    if layer.trainable:
+      for v in layer.__dict__:
+          v_arg = getattr(layer,v)
+          if hasattr(v_arg,'initializer'):
+              initializer_method = getattr(v_arg, 'initializer')
+              initializer_method.run(session=session)
+              # print('reinitializing layer {}.{}'.format(layer.name, v))
+  return model
 #------------------------------------------------------------------------------+
 
 config = {
@@ -885,34 +932,35 @@ config = {
   'cxrt': .2,
   'layers': 0, 
   'env': 'BattleZone-v0', 
-  'elitist': 3,
-  'sharpness': 1,
+  'elitist': 4,
+  'sharpness': 2,
   'cxtype': 'splice',
-  'population': 21, 
-  'mxrt': 0.00001,
+  'population': 20,
+  'mxrt': ['default', 1/250000, 1/56000, 1/25000][0],
   'transfer': True,
-  'generations': 80, 
+  'generations': 50, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': 6000,
+  'fitness_goal': 25000,
   'random_children': 1,
-  'validation_size': 2,
-  'activation': 'linear', 
-  'nodes_per_layer': [], 
+  'validation_size': None,
+  'activation': 'softmax', 
+  'nodes_per_layer': [],
 }
 
 if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(filename='BattleZoneTemp.h5', target='BattleZone.h5')
+    agents.train(target='CartPole2.h5')
     agents.show_plot()
     agents.evaluate()
   except:
     traceback.print_exc()
     print('\nAborting...')
-    agents.save_best(target='ex_model_battlezone.h5')
-    print('Best results saved to ex_model_battlezone.h5')
+    fn = 'ex_model_mountaincar.h5'
+    agents.save_best(target=fn)
+    print(f'Best results saved to {fn}')
 
 #  test model
   # try:

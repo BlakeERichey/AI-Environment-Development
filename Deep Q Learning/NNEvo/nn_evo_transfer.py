@@ -8,7 +8,7 @@ Implementation of NeuroEvolution Algorithm:
   weights, as an alternative to backpropogation
 '''
 
-import gym, operator, time
+import gym, operator, time, math
 import os, datetime, random
 import numpy             as np
 import tensorflow        as tf
@@ -309,7 +309,7 @@ class NNEvo:
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt == 'default':
-        self.mxrt = 1/( self.weights_lengths[-1] * 1.8 )
+        self.mxrt = math.log(self.weights_lengths[-1], 2)/(self.weights_lengths[-1])
       print('Weight Shapes:', self.weight_shapes)
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
@@ -388,7 +388,7 @@ class NNEvo:
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt == 'default':
-        self.mxrt = 1/( self.weights_lengths[-1] * 1.8 )
+        self.mxrt = math.log(self.weights_lengths[-1], 2)/(self.weights_lengths[-1])
       print('Weight Shapes:', self.weight_shapes)
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
@@ -656,17 +656,27 @@ class NNEvo:
   
   def mutate(self, population):
     if self.mx_type!='default':
-      '''randomize layers'''
-      begin = 0
+      '''randomize layers, VERY INEFFICIENT'''
+      mutated = False
       for ind, individual in enumerate(population):
-        if ind >= self.elitist:
-          for i, val in enumerate(self.weights_lengths):
-            if random.random() < self.mxrt:
-              for gene in range(begin, val):
-                individual[gene] = random.uniform(-1, 1)
-            begin=val
+        model = self.load_weights(individual)
+        session = backend.get_session()
+        for layer in model.layers:
+          if random.random() < self.mxrt:
+            if not mutated:
+              mutated = True
+            for v in layer.__dict__:
+              v_arg = getattr(layer,v)
+              if hasattr(v_arg,'initializer'):
+                initializer_method = getattr(v_arg, 'initializer')
+                initializer_method.run(session=session)
+        if mutated:
+          weights = self.serialize(model)
+          for i, gene in enumerate(individual):
+            individual[i] = weights[i]
 
-    else:   
+    else:
+      ref_genes = self.serialize(reinitLayers(self.models[0]))
       for ind, individual in enumerate(population):
         #if ind >= self.elitist: #ignore elites
           for i, gene in enumerate(individual):
@@ -674,8 +684,10 @@ class NNEvo:
             if self.random_children and mxrt != 1:
               if ind == len(population) - self.random_children: #Randomly initialize last child
                 mxrt = 1
+            if mxrt == 1: #for random children
+              ref_genes = self.serialize(reinitLayers(self.models[0]))
             if random.random() < mxrt:
-              individual[i] = random.uniform(-1, 1)
+              individual[i] = ref_genes[i]
     
     return population
   #----------------------------------------------------------------------------+
@@ -803,16 +815,10 @@ class NNEvo:
     if not self.goal_met:
       if self.best_results['fitness']:
         genes = self.best_results['genes']
-        model = self.models[0]
-        if self.transfer:
-          self.models[0] = self.create_transfer_cnn(\
-            ref_model=model, fcn_weights=agents.deserialize(genes)
-          )
-        else:
-          model.set_weights(self.deserialize(genes))
-        model.save_weights(target)
       elif self.best_fit:
-        self.models[self.best_fit[0]].save_weights(target)
+        genes = self.pop[self.best_fit[0]]
+      model = self.load_weights(genes)
+      model.save_weights(target)
       print(f'Best results saved to {target}')
 
   def predict(self, model, envstate):
@@ -909,7 +915,8 @@ def format_time(seconds):
 
 def reinitLayers(model):
   session = backend.get_session()
-  for layer in model.layers: 
+  for layer in model.layers:
+    if layer.trainable:
       for v in layer.__dict__:
           v_arg = getattr(layer,v)
           if hasattr(v_arg,'initializer'):
@@ -920,32 +927,32 @@ def reinitLayers(model):
 #------------------------------------------------------------------------------+
 
 config = {
-  'tour': 4,
-  'cores': 15,
+  'tour': 3,
+  'cores': 3,
   'cxrt': .2,
-  'layers': 8, 
-  'env': 'MountainCar-v0', 
-  'elitist': 3,
-  'sharpness': 8,
+  'layers': 0, 
+  'env': 'BattleZone-v0', 
+  'elitist': 4,
+  'sharpness': 2,
   'cxtype': 'splice',
-  'population': 40,
-  'mxrt': 'default',
-  'transfer': False,
-  'generations': 100, 
+  'population': 20,
+  'mxrt': ['default', 1/250000, 1/56000, 1/25000][0],
+  'transfer': True,
+  'generations': 50, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': -110,
+  'fitness_goal': 25000,
   'random_children': 1,
   'validation_size': None,
   'activation': 'softmax', 
-  'nodes_per_layer': [64,128,256,384,256,128,64,32],
+  'nodes_per_layer': [],
 }
 
 if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(target='MountainCar2.h5')
+    agents.train(target='CartPole2.h5')
     agents.show_plot()
     agents.evaluate()
   except:
