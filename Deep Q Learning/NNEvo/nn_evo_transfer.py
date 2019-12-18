@@ -494,7 +494,7 @@ class NNEvo:
     if self.best_fit[1] >= self.best_results.get('fitness', -1000000):
       self.best_results['fitness'] = self.best_fit[1]
       self.best_results['genes'] = [gene for gene in self.pop[self.best_fit[0]]]
-    return selection
+    return selection[:self.pop_size]
 
   def selection_mp(self):
     '''
@@ -602,7 +602,7 @@ class NNEvo:
     if self.best_fit[1] >= self.best_results.get('fitness', -1000000) or self.goal_met:
       self.best_results['fitness'] = self.best_fit[1]
       self.best_results['genes'] = [gene for gene in self.pop[self.best_fit[0]]]
-    return selection
+    return selection[:self.pop_size]
 
   def crossover(self, parents):
     children = [] #gene strings
@@ -646,6 +646,13 @@ class NNEvo:
           geneB = random.randrange(geneA, len(parent1_genes)+1)
 
           child = splice_list(parent1_genes, parent2_genes, geneA, geneB)
+      elif self.cxtype == 'weave':
+        child = [] #gene string
+        for j in range(len(parent1_genes)):
+          if j % 2 == 0:
+            child.append(parent1_genes[j])
+          else:
+            child.append(parent2_genes[j])
       else:
         child = ((np.array(parent1_genes) + np.array(parent2_genes)) / 2).tolist()
       
@@ -698,7 +705,7 @@ class NNEvo:
   
   #--- Train/Evaluate ---------------------------------------------------------+
 
-  def train(self, filename=None, target='best_model.h5'):
+  def train(self, filename=None, target='best_model.h5', callbacks=None):
     self.create_population()
     print('Population created', len(self.pop))
 
@@ -711,32 +718,36 @@ class NNEvo:
     print(f'Starting at: {self.start_time}')
 
     for i in range(self.generations):
-      print('\nGeneration:', i+1, '/', self.generations)
-      if self.cores > 1:
-        parents = self.selection_mp()
-      else:
-        parents = self.selection()
+      try:
+        print('\nGeneration:', i+1, '/', self.generations)
+        if self.cores > 1:
+          parents = self.selection_mp()
+        else:
+          parents = self.selection()
 
-      if i == self.generations - 1: #dont perform mutatations on last gen
+        if i == self.generations - 1: #dont perform mutatations on last gen
+            break
+        if not self.goal_met:
+          print('Goal not met. Parents selected.')
+          print('Best fit:', self.best_fit)
+          print('Best Results', self.best_results.get('fitness'))
+          children = self.crossover(parents)
+          print('Breeding done.')
+          new_pop = self.mutate(children)
+          print('Mutations done.')
+          
+          print('New pop:', len(new_pop))
+          self.pop = new_pop
+          #create new pop
+        else:
+          print(f'Goal met! Episodes: {self.episodes}')
+          self.goal_met.save_weights(target)
+          print(f'Best results saved to {target}')
           break
-      if not self.goal_met:
-        print('Goal not met. Parents selected.')
-        print('Best fit:', self.best_fit)
-        print('Best Results', self.best_results.get('fitness'))
-        children = self.crossover(parents)
-        print('Breeding done.')
-        new_pop = self.mutate(children)
-        print('Mutations done.')
-        
-        print('New pop:', len(new_pop))
-        self.pop = new_pop
-        #create new pop
-      else:
-        print(f'Goal met! Episodes: {self.episodes}')
-        self.goal_met.save_weights(target)
-        print(f'Best results saved to {target}')
-        break
-      
+      finally:
+        if callbacks:
+          for func in callbacks:
+            func()
       dt = datetime.datetime.now() - self.start_time
       print('Time Running: ', format_time(dt.total_seconds()))
     
@@ -932,31 +943,42 @@ def reinitLayers(model):
 
 config = {
   'tour': 3,
-  'cores': 3,
+  'cores': 1,
   'cxrt': .2,
-  'layers': 0, 
-  'env': 'BattleZone-v0', 
+  'layers': 8, 
+  'env': 'MountainCar-v0', 
   'elitist': 4,
-  'sharpness': 2,
-  'cxtype': 'splice',
-  'population': 20,
-  'mxrt': ['default', 1/250000, 1/56000, 1/25000][0],
-  'transfer': True,
+  'sharpness': 1,
+  'cxtype': 'weave',
+  'population': 30,
+  'mxrt': 1/100,
+  'transfer': False,
   'generations': 50, 
-  'mx_type': 'default',
+  'mx_type': 'layer',
   'selection': 'tour',
-  'fitness_goal': 25000,
+  'fitness_goal': -110,
   'random_children': 1,
-  'validation_size': None,
+  'validation_size': 100,
   'activation': 'softmax', 
-  'nodes_per_layer': [],
+  'nodes_per_layer': [32,64,128,256,384,256,128,64][::-1],
 }
+
+
+def test_func():
+  if agents.best_fit[1] > -110 and agents.sharpness != 10:
+    print('Updating Sharpness...')
+    agents.sharpness = 10
+    print(agents.sharpness)
+    agents.cores = 12
+    agents.envs = [gym.make(config['env']) for _ in range(agents.cores)]
+    agents.best_fit = None
+    print('Environments Created:', agents.cores)
 
 if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(target='BattleZone2.h5')
+    agents.train(filename='ex_model_mountaincar.h5', target='MountainCar2.h5', callbacks=[test_func])
     agents.show_plot()
     agents.evaluate()
   except:
@@ -966,10 +988,3 @@ if __name__ == '__main__':
     agents.save_best(target=fn)
     print(f'Best results saved to {fn}')
 
-#  test model
-  # try:
-  #     agents = NNEvo(**config)
-  #     agents.evaluate('MountainCar.h5')
-  # except:
-  #     traceback.print_exc()
-  #     agents.envs[0].close()
