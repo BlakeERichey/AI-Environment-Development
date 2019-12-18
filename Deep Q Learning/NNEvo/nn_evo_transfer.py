@@ -19,7 +19,7 @@ from   tensorflow.keras              import backend
 from   sklearn.model_selection       import train_test_split
 from   tensorflow.keras.applications import ResNet50
 from   tensorflow.python.client      import device_lib
-from   tensorflow.keras.models       import Sequential, Model
+from   tensorflow.keras.models       import Sequential, Model, clone_model
 from   tensorflow.keras.callbacks    import TensorBoard, ModelCheckpoint
 from   tensorflow.keras.layers       import Dense, Dropout, Conv2D, MaxPooling2D, \
     Activation, Flatten, BatchNormalization, LSTM
@@ -162,10 +162,10 @@ def multi_quality(
       
       total_rewards.append(sum(rewards))
     
-    if 5 >= sharpness >= 1:
-      result = max(total_rewards)
-    else:
-      result = sum(total_rewards)/len(total_rewards)
+    # if 5 >= sharpness >= 1:
+    #   result = max(total_rewards)
+    # else:
+    result = sum(total_rewards)/len(total_rewards)
   except Exception as e:
     print('Exception Occured in Process!', e)
     result = -1000000
@@ -310,6 +310,7 @@ class NNEvo:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt == 'default':
         self.mxrt = 1/( self.weights_lengths[-1] * 1.8 )
+      print('Weight Shapes:', self.weight_shapes)
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
       print('Crossover Type:', self.cxtype)
@@ -398,27 +399,32 @@ class NNEvo:
     return model
   
   def create_population(self):
+    if self.transfer:
+      model = self.create_transfer_cnn()
+    else:
+      model = self.create_nn()
+    self.models.append(model)
+    model_genes = self.serialize(model)
     for i in range(self.pop_size):
-      if self.transfer:
-        model = self.create_transfer_cnn()
-      else:
-        model = self.create_nn()
-      self.models.append(model)
-      self.pop.append(self.serialize(model))
-
-      print('Model', i+1, 'created.')
+      new_ind = reinitLayers(model)
+      self.pop.append(self.serialize(new_ind))
+      print('Model', i, 'created.')
+    
+    print('Correctly generated:', not(False in [len(model_genes) == len(self.pop[i]) for i in range(self.pop_size)]))
   #----------------------------------------------------------------------------+
 
   #--- Fitness Calculation ----------------------------------------------------+
 
-  def quality(self, model, i):
+  def quality(self, genes, i):
     '''
       fitness function. Returns quality of model
-      Runs 1 episode of environment
-
-      arr: subprocess accessible memory for storing results. indexed by model number `i`
+      Runs average of self.sharpness episodes of environment
     '''
     print(f'Testing model {i}...', end='')
+    #load weights
+    model = self.load_weights(genes)
+    
+    #Test model
     total_rewards = []
     for epoch in range(self.sharpness):
       self.episodes += 1
@@ -432,10 +438,10 @@ class NNEvo:
       
       total_rewards.append(sum(rewards))
     
-    if 5 >= self.sharpness >= 1:
-      result = max(total_rewards)
-    else:
-      result = sum(total_rewards)/len(total_rewards)
+    # if 5 >= self.sharpness >= 1:
+    #   result = max(total_rewards)
+    # else:
+    result = sum(total_rewards)/len(total_rewards)
     print(result)
     return result
   
@@ -449,18 +455,18 @@ class NNEvo:
     selection = []
 
     ranked = [] #ranked models, best to worst
-    for i, model in enumerate(self.models):
-      fitness = self.quality(model, i)
+    for i, genes in enumerate(self.pop):
+      fitness = self.quality(genes, i)
       ranked.append((i, fitness))
       if self.fitness_goal is not None and fitness >= self.fitness_goal:
         #goal met? If so, early stop
         if self.validation_size:
-          valid = self.validate(self.models[i])
+          valid = self.validate(self.models[0])
         else:
           valid = True
         
         if valid:
-          self.goal_met = self.models[i] #save model that met goal
+          self.goal_met = self.models[0] #save model that met goal
           self.best_fit = (i, fitness)
           break
 
@@ -567,12 +573,12 @@ class NNEvo:
         #goal met? If so, early stop
         i = model[0] #model number
         if self.validation_size:
-          valid = self.validate(self.models[i])
+          valid = self.validate(self.load_weights(self.pop[i]))
         else:
           valid = True
         
         if valid:
-          self.goal_met = self.models[i] #save model that met goal
+          self.goal_met = self.models[0] #save model that met goal
           self.best_fit = model
           break
 
@@ -695,7 +701,7 @@ class NNEvo:
       else:
         parents = self.selection()
 
-      if i == self.generations - 1:
+      if i == self.generations - 1: #dont perform mutatations on last gen
           break
       if not self.goal_met:
         print('Goal not met. Parents selected.')
@@ -709,15 +715,6 @@ class NNEvo:
         print('New pop:', len(new_pop))
         self.pop = new_pop
         #create new pop
-        if self.transfer:
-          for i, individual in enumerate(new_pop):
-            model = self.models[i]
-            self.models[i] = self.create_transfer_cnn(\
-              ref_model=model, fcn_weights=agents.deserialize(individual)
-            )
-        else: 
-          for i, individual in enumerate(new_pop):
-            self.models[i].set_weights(self.deserialize(individual))   
       else:
         print(f'Goal met! Episodes: {self.episodes}')
         self.goal_met.save_weights(target)
@@ -726,6 +723,9 @@ class NNEvo:
       
       dt = datetime.datetime.now() - self.start_time
       print('Time Running: ', format_time(dt.total_seconds()))
+    
+    dt = datetime.datetime.now() - self.start_time
+    print('Time Running: ', format_time(dt.total_seconds()))
     
     self.save_best(target=target)
 
@@ -862,6 +862,17 @@ class NNEvo:
     
     return weights
 
+  def load_weights(self, genes):
+    if self.transfer:
+      model = self.models[0]
+      self.models[0] = self.create_transfer_cnn(\
+        ref_model=model, fcn_weights=self.deserialize(genes)
+      )
+    else: 
+        self.models[0].set_weights(self.deserialize(genes))
+    
+    return self.models[0]
+
 def splice_list(list1, list2, index1, index2):
   '''
     combined list1 and list2 taking splice from list1 with starting index `index1`
@@ -895,42 +906,54 @@ def format_time(seconds):
     else:
         h = seconds / 3600.0
         return "%.2f hours" % (h,)
+
+def reinitLayers(model):
+  session = backend.get_session()
+  for layer in model.layers: 
+      for v in layer.__dict__:
+          v_arg = getattr(layer,v)
+          if hasattr(v_arg,'initializer'):
+              initializer_method = getattr(v_arg, 'initializer')
+              initializer_method.run(session=session)
+              # print('reinitializing layer {}.{}'.format(layer.name, v))
+  return model
 #------------------------------------------------------------------------------+
 
 config = {
   'tour': 4,
-  'cores': 3,
+  'cores': 15,
   'cxrt': .2,
-  'layers': 0, 
-  'env': 'BattleZone-v0', 
-  'elitist': 4,
-  'sharpness': 1,
+  'layers': 8, 
+  'env': 'MountainCar-v0', 
+  'elitist': 3,
+  'sharpness': 8,
   'cxtype': 'splice',
-  'population': 40, 
+  'population': 40,
   'mxrt': 'default',
-  'transfer': True,
+  'transfer': False,
   'generations': 100, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': None,
+  'fitness_goal': -110,
   'random_children': 1,
-  'validation_size': 0,
+  'validation_size': None,
   'activation': 'softmax', 
-  'nodes_per_layer': [], 
+  'nodes_per_layer': [64,128,256,384,256,128,64,32],
 }
 
 if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(filename='BattleZoneTemp.h5', target='BattleZone.h5')
+    agents.train(target='MountainCar2.h5')
     agents.show_plot()
     agents.evaluate()
   except:
     traceback.print_exc()
     print('\nAborting...')
-    agents.save_best(target='ex_model_battlezone.h5')
-    print('Best results saved to ex_model_battlezone.h5')
+    fn = 'ex_model_mountaincar.h5'
+    agents.save_best(target=fn)
+    print(f'Best results saved to {fn}')
 
 #  test model
   # try:

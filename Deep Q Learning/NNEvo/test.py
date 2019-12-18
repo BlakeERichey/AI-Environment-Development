@@ -3,24 +3,24 @@ from nn_evo_transfer import NNEvo
 from time import time
 
 config = {
-  'tour': 3,
-  'cores': 3,
+  'tour': 4,
+  'cores': 1,
   'cxrt': .2,
   'layers': 0, 
   'env': 'BattleZone-v0', 
-  'elitist': 3,
+  'elitist': 4,
   'sharpness': 1,
   'cxtype': 'splice',
-  'population': 21, 
-  'mxrt': 0.00001,
+  'population': 40, 
+  'mxrt': 'default',
   'transfer': True,
-  'generations': 80, 
+  'generations': 100, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': 6000,
+  'fitness_goal': None,
   'random_children': 1,
-  'validation_size': 2,
-  'activation': 'linear', 
+  'validation_size': 0,
+  'activation': 'softmax', 
   'nodes_per_layer': [], 
 }
 
