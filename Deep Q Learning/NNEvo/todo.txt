@@ -1,4 +1,2 @@
 sliding mutation rate
-true splicing of genes in crossover
 validate in parallel
-improve fitness?

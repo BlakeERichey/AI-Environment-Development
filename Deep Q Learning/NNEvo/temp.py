@@ -8,7 +8,7 @@ Implementation of NeuroEvolution Algorithm:
   weights, as an alternative to backpropogation
 '''
 
-import gym, operator, time, math
+import gym, operator, time, math, statistics
 import os, datetime, random
 import numpy             as np
 import tensorflow        as tf
@@ -173,9 +173,9 @@ def multi_quality(
   res[index] = result
 
   # spontaneous saving
-  if result > 20000:
+  if result > -110:
     print(f'Saving model {index}...')
-    model.save_weights(f'BattleZone_{result}.h5')
+    model.save_weights(f'mountaincar_{int(result)}.h5')
     print('Model saved')
   return result
 
@@ -473,6 +473,7 @@ class NNEvo:
     if not self.goal_met:  #if goal met prepare to terminate
       ranked = sorted(ranked, key=operator.itemgetter(1), reverse=True)
       print('Ranked:', ranked)
+      self.ranked = ranked
       self.best_fit = ranked[0]
 
       for i in range(self.elitist):
@@ -491,7 +492,7 @@ class NNEvo:
             
 
     self.plots.append(self.best_fit)
-    if self.best_fit[1] >= self.best_results.get('fitness', -1000000):
+    if self.best_fit[1] >= self.best_results.get('fitness', -1000000) or self.goal_met:
       self.best_results['fitness'] = self.best_fit[1]
       self.best_results['genes'] = [gene for gene in self.pop[self.best_fit[0]]]
     return selection[:self.pop_size]
@@ -566,6 +567,7 @@ class NNEvo:
 
     ranked = sorted(ranked, key=operator.itemgetter(1), reverse=True)
     print('Ranked:', ranked)
+    self.ranked = ranked
     self.best_fit = ranked[0]
     
     for model in ranked: #model = (i, fitness)
@@ -725,9 +727,7 @@ class NNEvo:
         else:
           parents = self.selection()
 
-        if i == self.generations - 1: #dont perform mutatations on last gen
-            break
-        if not self.goal_met:
+        if not(i == self.generations - 1): #dont perform mutatations on last gen
           print('Goal not met. Parents selected.')
           print('Best fit:', self.best_fit)
           print('Best Results', self.best_results.get('fitness'))
@@ -738,21 +738,15 @@ class NNEvo:
           
           print('New pop:', len(new_pop))
           self.pop = new_pop
-          #create new pop
-        else:
-          print(f'Goal met! Episodes: {self.episodes}')
-          self.goal_met.save_weights(target)
-          print(f'Best results saved to {target}')
-          break
       finally:
         if callbacks:
           for func in callbacks:
             func()
       dt = datetime.datetime.now() - self.start_time
       print('Time Running: ', format_time(dt.total_seconds()))
-    
-    dt = datetime.datetime.now() - self.start_time
-    print('Time Running: ', format_time(dt.total_seconds()))
+      if self.goal_met:
+        print(f'Goal met! Episodes: {self.episodes}')
+        break
     
     self.save_best(target=target)
 
@@ -827,14 +821,13 @@ class NNEvo:
   #--- Helper Functions -------------------------------------------------------+
 
   def save_best(self, target='best_model.h5'):
-    if not self.goal_met:
-      if self.best_results['fitness']:
-        genes = self.best_results['genes']
-      elif self.best_fit:
-        genes = self.pop[self.best_fit[0]]
-      model = self.load_weights(genes)
-      model.save_weights(target)
-      print(f'Best results saved to {target}')
+    if self.best_results['fitness']:
+      genes = self.best_results['genes']
+    elif self.best_fit:
+      genes = self.pop[self.best_fit[0]]
+    model = self.load_weights(genes)
+    model.save_weights(target)
+    print(f'Best results saved to {target}')
 
   def predict(self, model, envstate):
     ''' decide best action for model. '''
@@ -942,43 +935,67 @@ def reinitLayers(model):
 #------------------------------------------------------------------------------+
 
 config = {
-  'tour': 3,
+  'tour': 2,
   'cores': 1,
-  'cxrt': .2,
-  'layers': 8, 
+  'cxrt': .005,
+  'layers': 2, 
   'env': 'MountainCar-v0', 
-  'elitist': 4,
+  'elitist': 3,
   'sharpness': 1,
   'cxtype': 'weave',
   'population': 30,
-  'mxrt': 1/100,
+  'mxrt': 'default',
   'transfer': False,
-  'generations': 50, 
-  'mx_type': 'layer',
+  'generations': 200, 
+  'mx_type': 'default',
   'selection': 'tour',
   'fitness_goal': -110,
-  'random_children': 1,
+  'random_children': 0,
   'validation_size': 100,
-  'activation': 'softmax', 
-  'nodes_per_layer': [32,64,128,256,384,256,128,64][::-1],
+  'activation': 'linear', 
+  'nodes_per_layer': [256,256],
 }
 
-
-def test_func():
-  if agents.best_fit[1] > -110 and agents.sharpness != 10:
-    print('Updating Sharpness...')
-    agents.sharpness = 10
-    print(agents.sharpness)
-    agents.cores = 12
-    agents.envs = [gym.make(config['env']) for _ in range(agents.cores)]
-    agents.best_fit = None
-    print('Environments Created:', agents.cores)
+def cb():
+  if not hasattr(agents, 'prev_std'):
+    agents.prev_std = 0
+  if not agents.goal_met:
+    if agents.sharpness == 100 and agents.best_fit[1] > -120:
+      print('Updating Sharpness...')
+      agents.sharpness = 250
+      print(agents.sharpness)
+      agents.best_fit = None
+      agents.best_results = {}
+      agents.cxtype = 'cxrt'
+    if agents.sharpness == 10 and agents.best_fit[1] > -120:
+      print('Updating Sharpness...')
+      agents.sharpness = 100
+      print(agents.sharpness)
+      agents.best_fit = None
+      agents.best_results = {}
+    if agents.sharpness < 10 and agents.best_fit[1] > -120:
+      print('Updating Sharpness...')
+      agents.sharpness = 10
+      print(agents.sharpness)
+      agents.cores = 12
+      agents.envs = [gym.make(config['env']) for _ in range(agents.cores)]
+      agents.best_fit = None
+      agents.best_results = {}
+      print('Environments Created:', agents.cores)
+  fitnesses = [val for i, val in agents.ranked]
+  std = statistics.stdev(fitnesses)
+  if std > agents.prev_std:
+    agents.mxrt /= 1.02
+  else:
+    agents.mxrt *= 1.02
+  agents.prev_std = std
+  print('MXRT:', agents.mxrt)
 
 if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(filename='ex_model_mountaincar.h5', target='MountainCar2.h5', callbacks=[test_func])
+    agents.train(target='MountainCar2.h5', callbacks=[cb])
     agents.show_plot()
     agents.evaluate()
   except:
