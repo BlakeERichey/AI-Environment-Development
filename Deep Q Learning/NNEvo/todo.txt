@@ -1,2 +1,14 @@
 sliding mutation rate
 validate in parallel
+
+novelty over fitness
+dont drop species prematurely
+ensure good crossover
+increase NN architecture
+operate with a brain NN followed by a learn new task network (transfer learning)
+
+https://openai.com/blog/evolution-strategies/
+http://eplex.cs.ucf.edu/noveltysearch/userspage/
+http://eplex.cs.ucf.edu/neat_software/
+https://ieeexplore.ieee.org/document/784219
+https://www.oreilly.com/radar/neuroevolution-a-different-kind-of-deep-learning/

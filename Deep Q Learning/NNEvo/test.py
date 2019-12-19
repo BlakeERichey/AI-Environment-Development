@@ -3,31 +3,31 @@ from nn_evo_transfer import NNEvo
 from time import time
 
 config = {
-  'tour': 4,
-  'cores': 1,
-  'cxrt': .2,
-  'layers': 0, 
-  'env': 'BattleZone-v0', 
-  'elitist': 4,
+  'tour': 2,
+  'cores': 12,
+  'cxrt': .005,
+  'layers': 2, 
+  'env': 'MountainCar-v0', 
+  'elitist': 3,
   'sharpness': 1,
-  'cxtype': 'splice',
-  'population': 40, 
+  'cxtype': 'weave',
+  'population': 30,
   'mxrt': 'default',
-  'transfer': True,
-  'generations': 100, 
+  'transfer': False,
+  'generations': 200, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': None,
-  'random_children': 1,
-  'validation_size': 0,
-  'activation': 'softmax', 
-  'nodes_per_layer': [], 
+  'fitness_goal': -110,
+  'random_children': 0,
+  'validation_size': 100,
+  'activation': 'linear', 
+  'nodes_per_layer': [256,256],
 }
 
 #test model
 try:
     agents = NNEvo(**config)
-    agents.evaluate('BattleZoneTemp.h5')
+    agents.evaluate('mountaincar2_-119.h5')
 except:
     traceback.print_exc()
     agents.envs[0].close()

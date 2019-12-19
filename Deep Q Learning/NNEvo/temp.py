@@ -173,9 +173,9 @@ def multi_quality(
   res[index] = result
 
   # spontaneous saving
-  if result > -110:
+  if result > 20000:
     print(f'Saving model {index}...')
-    model.save_weights(f'mountaincar_{int(result)}.h5')
+    model.save_weights(f'mountaincar2_{int(result)}.h5')
     print('Model saved')
   return result
 
@@ -938,35 +938,48 @@ config = {
   'tour': 2,
   'cores': 1,
   'cxrt': .005,
-  'layers': 2, 
-  'env': 'MountainCar-v0', 
+  'layers': 0, 
+  'env': 'BattleZone-v0', 
   'elitist': 3,
   'sharpness': 1,
   'cxtype': 'weave',
   'population': 30,
   'mxrt': 'default',
-  'transfer': False,
-  'generations': 200, 
+  'transfer': True,
+  'generations': 2, 
   'mx_type': 'default',
   'selection': 'tour',
-  'fitness_goal': -110,
+  'fitness_goal': 20000,
   'random_children': 0,
   'validation_size': 100,
   'activation': 'linear', 
-  'nodes_per_layer': [256,256],
+  'nodes_per_layer': [],
 }
 
 def cb():
   if not hasattr(agents, 'prev_std'):
     agents.prev_std = 0
   if not agents.goal_met:
+    if agents.sharpness == 500 and agents.best_fit[1] > -120:
+      print('Updating Sharpness...')
+      agents.sharpness = 1000
+      print(agents.sharpness)
+      agents.best_fit = None
+      agents.best_results = {}
+    if agents.sharpness == 250 and agents.best_fit[1] > -120:
+      print('Updating Sharpness...')
+      agents.sharpness = 500
+      print(agents.sharpness)
+      agents.best_fit = None
+      agents.best_results = {}
+      # agents.cxtype = 'cxrt'
     if agents.sharpness == 100 and agents.best_fit[1] > -120:
       print('Updating Sharpness...')
       agents.sharpness = 250
       print(agents.sharpness)
       agents.best_fit = None
       agents.best_results = {}
-      agents.cxtype = 'cxrt'
+      # agents.cxtype = 'cxrt'
     if agents.sharpness == 10 and agents.best_fit[1] > -120:
       print('Updating Sharpness...')
       agents.sharpness = 100
@@ -986,16 +999,23 @@ def cb():
   std = statistics.stdev(fitnesses)
   if std > agents.prev_std:
     agents.mxrt /= 1.02
+    # agents.sharpness *= 2
   else:
     agents.mxrt *= 1.02
+    # agents.sharpness = max([agents.sharpness//2, 1])
   agents.prev_std = std
   print('MXRT:', agents.mxrt)
+  # print('SHARPNESS:', agents.sharpness)
+  # if agents.sharpness > 5:
+  #   agents.cores = 12
+  # else:
+  #   agents.cores = 1
 
 if __name__ == '__main__':
   #train model
   try:
     agents = NNEvo(**config)
-    agents.train(target='MountainCar2.h5', callbacks=[cb])
+    agents.train(callbacks=[])
     agents.show_plot()
     agents.evaluate()
   except:

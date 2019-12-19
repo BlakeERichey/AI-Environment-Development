@@ -175,58 +175,58 @@ def multi_quality(
   res[index] = result
 
   # spontaneous saving
-  if result > -110:
-    print(f'Saving model {index}...')
-    model.save_weights(f'mountaincar_{int(result)}.h5')
-    print('Model saved')
+  # if result > .79:
+  #   print(f'Saving model {index}...')
+  #   model.save_weights(f'./results/cornGA_{str(round(result, 2)*100)[:-2]}.h5')
+  #   print('Model saved')
   return result
 
 
 class NNEvo:
 
   def __init__(self, 
-    tour=3,
+    tour=2,
     cores=1,
-    cxrt=.2,
+    cxrt=.01,
     layers=1, 
     env=None,
     elitist=3,
     sharpness=1, 
-    cxtype='avg',
-    population=10, 
+    cxtype='weave',
+    population=15, 
     mxrt='default', 
     transfer=False,
-    generations=10, 
+    generations=50, 
     selection='tour',
     mx_type='default',
-    random_children=1, 
-    fitness_goal=200,
+    random_children=0, 
+    fitness_goal=None,
     validation_size=0,
     activation='linear',
-    nodes_per_layer=[4]):
+    nodes_per_layer=[128]):
 
     '''
       config = {
-        'tour': 3, 
-        'cxrt': .2,
-        'cores': 1,
-        'layers': 1, 
-        'env': None, 
-        'elitist': 3,
-        'sharpness': 1,
-        'cxtype': 'avg',
-        'population': 10, 
-        'mxrt': 'default',
-        'transfer': False,
-        'generations': 10, 
-        'selection': 'tour',
-        'fitness_goal': 200,
-        'random_children': 1,
-        'mx_type': 'default',
-        'validation_size': 0,
-        'activation': 'linear', 
-        'nodes_per_layer': [4], 
-      }
+      'tour': 2,
+      'cores': 1,
+      'cxrt': .005,
+      'layers': 2, 
+      'env': 'MountainCar-v0', 
+      'elitist': 3,
+      'sharpness': 1,
+      'cxtype': 'weave',
+      'population': 30,
+      'mxrt': 'default',
+      'transfer': False,
+      'generations': 200, 
+      'mx_type': 'default',
+      'selection': 'tour',
+      'fitness_goal': -110,
+      'random_children': 0,
+      'validation_size': 100,
+      'activation': 'linear', 
+      'nodes_per_layer': [256,256],
+    }
     '''
 
     self.default_nodes   = 128
@@ -935,75 +935,3 @@ def reinitLayers(model):
               # print('reinitializing layer {}.{}'.format(layer.name, v))
   return model
 #------------------------------------------------------------------------------+
-
-config = {
-  'tour': 2,
-  'cores': 1,
-  'cxrt': .005,
-  'layers': 2, 
-  'env': 'MountainCar-v0', 
-  'elitist': 3,
-  'sharpness': 1,
-  'cxtype': 'weave',
-  'population': 30,
-  'mxrt': 'default',
-  'transfer': False,
-  'generations': 200, 
-  'mx_type': 'default',
-  'selection': 'tour',
-  'fitness_goal': -110,
-  'random_children': 0,
-  'validation_size': 100,
-  'activation': 'linear', 
-  'nodes_per_layer': [256,256],
-}
-
-def cb():
-  if not hasattr(agents, 'prev_std'):
-    agents.prev_std = 0
-  if not agents.goal_met:
-    if agents.sharpness == 100 and agents.best_fit[1] > -120:
-      print('Updating Sharpness...')
-      agents.sharpness = 250
-      print(agents.sharpness)
-      agents.best_fit = None
-      agents.best_results = {}
-      agents.cxtype = 'cxrt'
-    if agents.sharpness == 10 and agents.best_fit[1] > -120:
-      print('Updating Sharpness...')
-      agents.sharpness = 100
-      print(agents.sharpness)
-      agents.best_fit = None
-      agents.best_results = {}
-    if agents.sharpness < 10 and agents.best_fit[1] > -120:
-      print('Updating Sharpness...')
-      agents.sharpness = 10
-      print(agents.sharpness)
-      agents.cores = 12
-      agents.envs = [gym.make(config['env']) for _ in range(agents.cores)]
-      agents.best_fit = None
-      agents.best_results = {}
-      print('Environments Created:', agents.cores)
-  fitnesses = [val for i, val in agents.ranked]
-  std = statistics.stdev(fitnesses)
-  if std > agents.prev_std:
-    agents.mxrt /= 1.02
-  else:
-    agents.mxrt *= 1.02
-  agents.prev_std = std
-  print('MXRT:', agents.mxrt)
-
-if __name__ == '__main__':
-  #train model
-  try:
-    agents = NNEvo(**config)
-    agents.train(target='MountainCar2.h5', callbacks=[cb])
-    agents.show_plot()
-    agents.evaluate()
-  except:
-    traceback.print_exc()
-    print('\nAborting...')
-    fn = 'ex_model_mountaincar.h5'
-    agents.save_best(target=fn)
-    print(f'Best results saved to {fn}')
-
