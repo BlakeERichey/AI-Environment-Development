@@ -167,7 +167,7 @@ def multi_quality(
     # if 5 >= sharpness >= 1:
     #   result = max(total_rewards)
     # else:
-    result = sum(total_rewards)/len(total_rewards)
+    result = round(sum(total_rewards)/len(total_rewards),5)
   except Exception as e:
     print('Exception Occured in Process!', e)
     result = -1000000
@@ -311,7 +311,7 @@ class NNEvo:
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt == 'default':
-        self.mxrt = math.log(self.weights_lengths[-1], 2)/(self.weights_lengths[-1])
+        self.mxrt = math.pow(math.log(self.weights_lengths[-1], 2), 2)/(self.weights_lengths[-1])
       print('Weight Shapes:', self.weight_shapes)
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
@@ -390,7 +390,7 @@ class NNEvo:
         else:
           self.weights_lengths.append(self.weights_lengths[len(self.weights_lengths)-1]+length)
       if self.mxrt == 'default':
-        self.mxrt = math.log(self.weights_lengths[-1], 10)/(self.weights_lengths[-1])
+        self.mxrt = math.pow(math.log(self.weights_lengths[-1], 2), 2)/(self.weights_lengths[-1])
       print('Weight Shapes:', self.weight_shapes)
       print('Weight Lengths:', self.weights_lengths)
       print('Mutation Rate:', self.mxrt)
@@ -440,10 +440,7 @@ class NNEvo:
       
       total_rewards.append(sum(rewards))
     
-    # if 5 >= self.sharpness >= 1:
-    #   result = max(total_rewards)
-    # else:
-    result = sum(total_rewards)/len(total_rewards)
+    result = round(sum(total_rewards)/len(total_rewards), 5)
     print(result)
     return result
   
@@ -729,7 +726,7 @@ class NNEvo:
         else:
           parents = self.selection()
 
-        if not(i == self.generations - 1): #dont perform mutatations on last gen
+        if not(i == self.generations - 1) and not self.goal_met: #dont perform mutatations on last gen
           print('Goal not met. Parents selected.')
           print('Best fit:', self.best_fit)
           print('Best Results', self.best_results.get('fitness'))
@@ -753,7 +750,7 @@ class NNEvo:
     self.save_best(target=target)
 
 
-  def evaluate(self, filename=None, epochs=0):
+  def evaluate(self, filename=None, epochs=0, render=True):
     if self.goal_met or filename:
       #load model
       if filename:
@@ -776,7 +773,7 @@ class NNEvo:
         while not done:
           action = self.predict(model, envstate)
           envstate, reward, done, info = self.envs[0].step(action)
-          if not epochs:
+          if render:
             self.envs[0].render()
           rewards.append(reward)
 
@@ -828,7 +825,7 @@ class NNEvo:
     elif self.best_fit:
       genes = self.pop[self.best_fit[0]]
     model = self.load_weights(genes)
-    model.save_weights(target)
+    model.save(target)
     print(f'Best results saved to {target}')
 
   def predict(self, model, envstate):
