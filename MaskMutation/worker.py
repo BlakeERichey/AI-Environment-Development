@@ -29,7 +29,7 @@ class Worker:
       envstate = env.reset()
       while not done:
         action = self.predict(self.net, envstate, continuous)
-        envstate, reward, done, info = env.step(action)
+        envstate, reward, done, _ = env.step(action)
         rewards.append(reward)
         if render:
           env.render()
@@ -100,7 +100,7 @@ class Worker:
   def gen_mask(self,):
     #GENERATE MASKS
     self.mask = []
-    for i, layer in enumerate(self.net.layers):
+    for layer in self.net.layers:
       rows, cols = layer.rows, layer.cols
       limit = math.sqrt(6/(rows+cols)) #glorot uniform
       mask = self.alpha*np.random.uniform(low=-limit, high=limit, size=(rows*cols,)).reshape((rows, cols))

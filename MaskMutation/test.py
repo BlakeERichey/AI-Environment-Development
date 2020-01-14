@@ -17,19 +17,20 @@ net.add_layer(256, "relu", use_bias=False)
 net.add_layer(outputs, "softmax", use_bias=False)
 net.compile()
 
-goal = -110
 elites = 5
 pop_size = 30
-sharpness = 1
 generations = 200
-metric='valid'
-params = [generations, pop_size, elites, sharpness, goal, metric]
-ga = Evolution(*params)
-ga.create_species(net, mutations=.5, patience=10, alpha=.1)
+
+ga = Evolution(generations, pop_size, elites, goal=-110, metric='valid')
+ga.create_species(net, mutations=.1, patience=10)
+
 worker = ga.train(env, validate=True, render=False, return_worker=True)
-worker.fitness(env,episodes=25,render=True)
+
+
+reward, _ = worker.fitness(env,episodes=100,render=True)
+print("Average reward:", reward)
 
 env.close()
 
-for i, worker in enumerate(ga.workers):
-  print('Worker', i, worker.history)
+# for i, worker in enumerate(ga.workers):
+#   print('Worker', i, worker.history)

@@ -26,7 +26,7 @@ class Layer:
     self.weights = weights
   
   def set_bias(self, bias):
-    assert isinstance(bias, np.ndarray), f"Invalid bias type. Wanted NumPy array, got {type(weights)}."
+    assert isinstance(bias, np.ndarray), f"Invalid bias type. Wanted NumPy array, got {type(bias)}."
 
     self.bias = bias
   

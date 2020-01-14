@@ -3,7 +3,7 @@ import numpy as np
 
 class Evolution:
 
-  def __init__(self, generations, pop_size, elites, sharpness, goal, metric='reward'):
+  def __init__(self, generations, pop_size, elites, sharpness=1, goal=None, metric='reward'):
     self.generations = generations
     self.pop_size = pop_size
     self.elites = elites
@@ -14,7 +14,7 @@ class Evolution:
     self.workers = []
 
   def create_species(self, nn, mutations=1, patience=25, alpha=0.05):
-    for i in range(self.pop_size):
+    for _ in range(self.pop_size):
       self.workers.append(Worker(nn, mutations, patience, alpha))
 
   def train(self, env, validate=False, render=False, return_worker=False):
@@ -27,10 +27,13 @@ class Evolution:
 
       ranked = sorted(ranked, key= lambda x: (x[1], x[2]), reverse=True)
       print("Gen:", gen, "Ranked:", ranked, '\n')
-      if self.metric == 'reward':
-        goal_met = ranked[0][1]>=self.goal
-      else:
-        goal_met = ranked[0][2]>=self.goal
+      if self.goal:
+        if self.metric == 'reward':
+          goal_met = ranked[0][1]>=self.goal
+        else:
+          goal_met = ranked[0][2]>=self.goal and ranked[0][1]>=self.goal
+      
+      #next gen
       if gen != self.generations - 1 and not(goal_met):
         #Gen new weights
         mating_pool = self.selection(ranked)

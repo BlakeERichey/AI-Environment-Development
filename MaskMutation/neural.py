@@ -8,7 +8,7 @@ class Network:
     self.input = None
     self.output = None
   
-  def add_layer(self, nodes, activation, weights=None, use_bias=True):
+  def add_layer(self, nodes, activation="", weights=None, use_bias=True):
     assert nodes > 0 and type(nodes) == int, "Invalid quantity of nodes"
 
     rows = 0
@@ -47,7 +47,7 @@ class Network:
     net.input = self.input
     net.output = self.output
     net.layers = []
-    for i, layer in enumerate(self.layers):
+    for layer in self.layers:
       net.layers.append(layer.clone())
     
     return net
