@@ -32,3 +32,9 @@ class Layer:
   
   def __str__(self,):
     return f'{self.rows} {self.cols} \n{self.weights}'
+  
+  def clone(self):
+    '''returns new laye with reinitialized weights and biases'''
+    use_bias = not(self.bias is None)
+    rows, cols, activation = self.rows, self.cols, self.activatation.function
+    return Layer(rows, cols, activation, use_bias=use_bias)

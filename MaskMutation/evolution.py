@@ -13,19 +13,20 @@ class Evolution:
 
     self.workers = []
 
-  def create_species(self, nn, mutations, patience, alpha=0.05):
+  def create_species(self, nn, mutations=1, patience=25, alpha=0.05):
     for i in range(self.pop_size):
       self.workers.append(Worker(nn, mutations, patience, alpha))
 
-  def train(self, env, validate=False, render=False):
+  def train(self, env, validate=False, render=False, return_worker=False):
+    assert len(self.workers), "No Species Created."
     for gen in range(self.generations):
       ranked = []
       for i, worker in enumerate(self.workers):
-        res, val = worker.fitness()
+        res, val = worker.fitness(env, self.sharpness, validate, render)
         ranked.append((i, res, val))
 
       ranked = sorted(ranked, key= lambda x: (x[1], x[2]), reverse=True)
-      print("Gen:", gen, "Ranked:", ranked)
+      print("Gen:", gen, "Ranked:", ranked, '\n')
       if self.metric == 'reward':
         goal_met = ranked[0][1]>=self.goal
       else:
@@ -36,8 +37,8 @@ class Evolution:
         new_weights = []
         for i, worker in enumerate(mating_pool):
           if len(new_weights) < self.pop_size - self.elites:
-            parent1 = worker
-            parent2 = self.workers[-i]
+            parent1 = self.workers[worker[0]]
+            parent2 = self.workers[mating_pool[-i][0]]
             weights = parent1.breed(parent2)
             new_weights.append(weights)
         
@@ -49,14 +50,17 @@ class Evolution:
         #apply new weights and mutate
         for i, worker in enumerate(self.workers):
           if i > self.elites:
-            worker.nn.weights = new_weights[i]
+            worker.net.weights = new_weights[i-self.elites]
           worker.mutate()
       
       if goal_met:
         break
         
     best_worker = ranked[0][0] #id
-    return self.workers[best_worker].net
+    worker = self.workers[best_worker]
+    if return_worker:
+      return worker
+    return worker.net
 
   
   def selection(self, ranked):

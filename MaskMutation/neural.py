@@ -41,3 +41,19 @@ class Network:
       hi = ho
 
     return hi
+
+  def clone(self):
+    net = Network()
+    net.input = self.input
+    net.output = self.output
+    net.layers = []
+    for i, layer in enumerate(self.layers):
+      net.layers.append(layer.clone())
+    
+    return net
+  
+  def __str__(self,):
+    string = ''
+    for layer in self.layers:
+      string+=str(layer)+'\n'
+    return string

@@ -16,10 +16,10 @@ class Worker:
     self.history = [] #history of priorities
     self.gen_mask()
 
-  def fitness(self, env, episodes, validate=False, render=False):
+  def fitness(self, env, episodes=1, validate=False, render=False):
     continuous = True
-    if hasattr(env, "action_space.n"):
-      print("Discrete Environment")
+    if hasattr(env.action_space, "n"):
+      # print("Discrete Environment")
       continuous = False
 
     total_rewards = []
@@ -28,12 +28,13 @@ class Worker:
       rewards = []
       envstate = env.reset()
       while not done:
-        action = self.predict(nn, envstate, continuous)
+        action = self.predict(self.net, envstate, continuous)
         envstate, reward, done, info = env.step(action)
         rewards.append(reward)
         if render:
           env.render()
-      
+      if render:
+        print("Reward:", sum(rewards))
       total_rewards.append(sum(rewards))
     
     result = round(sum(total_rewards)/len(total_rewards), 5)
@@ -46,7 +47,7 @@ class Worker:
         rewards = []
         envstate = env.reset()
         while not done:
-          action = self.predict(nn, envstate, continuous)
+          action = self.predict(self.net, envstate, continuous)
           envstate, reward, done, info = env.step(action)
           rewards.append(reward)
           if render:
@@ -54,6 +55,8 @@ class Worker:
         
         total_rewards.append(sum(rewards))
 
+    if not len(total_rewards):
+      total_rewards = [0]
     validation_results = round(sum(total_rewards)/len(total_rewards), 5)
 
     return result, validation_results
@@ -73,9 +76,9 @@ class Worker:
   def mutate(self,):
     for i, layer in enumerate(self.net.layers):
       if np.random.uniform() < self.mutations / len(self.net.layers):
-        print("Mutating", i)
         rows, cols = layer.rows, layer.cols
-        layer.weights = np.add(layer.weights, self.mask[:rows, :cols])
+        mask = self.mask[i]
+        layer.weights = np.add(layer.weights, mask[:rows, :cols])
 
   def add_rank(self, rank, pop_size):
     '''takes rank in a generation and logs it to history '''
@@ -86,29 +89,26 @@ class Worker:
     
     low_performing = 0
     thresh = int(.75*pop_size)
-    for i, val in range(self.history):
+    for _, val in enumerate(self.history):
       if val >= thresh:
         low_performing+=1
     
     if low_performing >= self.patience:
       self.gen_mask()
+      self.net = self.net.clone()
 
   def gen_mask(self,):
-    #GENERATE MASK
-    largest_layer = 0 #index of largest layer
-    params = 0 #number of params in largest layer
+    #GENERATE MASKS
+    self.mask = []
     for i, layer in enumerate(self.net.layers):
-      if layer.weights.size > params:
-        params = layer.weights.size
-        largest_layer = i
-
-    rows, cols = self.net.layers[largest_layer].rows, self.net.layers[largest_layer].cols
-    limit = math.sqrt(6/(rows+cols)) #glorot uniform
-    self.mask = self.alpha*np.random.uniform(low=-limit, high=limit, size=(rows*cols,)).reshape((rows, cols))
+      rows, cols = layer.rows, layer.cols
+      limit = math.sqrt(6/(rows+cols)) #glorot uniform
+      mask = self.alpha*np.random.uniform(low=-limit, high=limit, size=(rows*cols,)).reshape((rows, cols))
+      self.mask.append(mask)
 
   def predict(self, model, envstate, continuous=False):
     ''' decide best action for model. utility function. '''
-    qvals = model.predict(envstate)[0] 
+    qvals = model.feed_forward(envstate)
     if continuous == True:
       action = qvals #continuous action space
     else:
