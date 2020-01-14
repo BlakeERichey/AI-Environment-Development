@@ -13,9 +13,10 @@ class Evolution:
 
     self.workers = []
 
-  def create_species(self, nn, mutations=1, patience=25, alpha=0.05):
+  def create_species(self, nn, mutations=1,thresh=1,patience=25,alpha=0.05):
     for _ in range(self.pop_size):
-      self.workers.append(Worker(nn, mutations, patience, alpha))
+      net = nn.clone()
+      self.workers.append(Worker(net, mutations, thresh, patience, alpha))
 
   def train(self, env, validate=False, render=False, return_worker=False):
     assert len(self.workers), "No Species Created."

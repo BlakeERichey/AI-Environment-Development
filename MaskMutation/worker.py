@@ -3,13 +3,14 @@ import numpy as np
 
 class Worker:
 
-  def __init__(self, network, mutations=1, patience=25, alpha=.05):
+  def __init__(self, network, mutations=1, thresh=0, patience=25, alpha=.05):
     '''
       mutations: number of layers mutated on average
     '''
 
     self.net = network
     self.alpha = alpha
+    self.thresh = thresh
     self.patience = patience
     self.mutations = mutations #layers to mutate on average
     
@@ -88,13 +89,13 @@ class Worker:
       del self.history[0]
     
     low_performing = 0
-    thresh = int(.75*pop_size)
     for _, val in enumerate(self.history):
-      if val >= thresh:
+      if val >= self.thresh:
         low_performing+=1
     
     if low_performing >= self.patience:
       self.gen_mask()
+      self.history = []
       self.net = self.net.clone()
 
   def gen_mask(self,):

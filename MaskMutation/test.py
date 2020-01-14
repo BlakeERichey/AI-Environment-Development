@@ -14,15 +14,16 @@ net.add_layer(inputs, "input", use_bias=False)
 net.add_layer(256, "relu", use_bias=False)
 net.add_layer(256, "relu", use_bias=False)
 net.add_layer(256, "relu", use_bias=False)
+# net.add_layer(32, "linear", use_bias=False)
 net.add_layer(outputs, "softmax", use_bias=False)
 net.compile()
 
-elites = 5
+elites = 10
 pop_size = 30
-generations = 200
+generations = 1000
 
-ga = Evolution(generations, pop_size, elites, goal=-110, metric='valid')
-ga.create_species(net, mutations=.1, patience=10)
+ga = Evolution(generations, pop_size, elites, goal=-110, metric='valid', sharpness=1)
+ga.create_species(net, mutations=4, patience=25, alpha=0.01, thresh=20)
 
 worker = ga.train(env, validate=True, render=False, return_worker=True)
 
