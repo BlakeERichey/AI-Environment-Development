@@ -75,8 +75,11 @@ class Worker:
     return new_weights
   
   def mutate(self,):
+    mutations = self.mutations
+    if not len(self.history) or (0 in self.history):
+      mutations /= len(self.net.layers)
     for i, layer in enumerate(self.net.layers):
-      if np.random.uniform() < self.mutations / len(self.net.layers):
+      if np.random.uniform() < mutations / len(self.net.layers):
         rows, cols = layer.rows, layer.cols
         mask = self.mask[i]
         layer.weights = np.add(layer.weights, mask[:rows, :cols])
@@ -95,7 +98,7 @@ class Worker:
     
     if low_performing >= self.patience:
       self.gen_mask()
-      self.history = []
+      self.history = [self.history[-1]]
       self.net = self.net.clone()
 
   def gen_mask(self,):
