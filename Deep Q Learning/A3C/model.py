@@ -23,6 +23,8 @@ class ActorCritic:
     
     # self.actor = self.create_actor()
     # self.critic = self.create_critic()
+    self.actor = None
+    self.critic = None
     
     # self.actor.summary()
     # self.critic.summary()

@@ -1,6 +1,7 @@
-from model import ActorCritic
 import gym
 import numpy as np 
+from model import ActorCritic
+from buffer import ReplayBuffer
 
 def make_env(params, rank=0):
   env = gym.make(params.get('env_name'))
